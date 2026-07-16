@@ -6,10 +6,10 @@
 
 ---
 ## 0. 브렌치 설명
-main : 팀 프로젝트에 필요한 문서들과 개발 완료된 버전들만 머지해서 관리합니다.
-  dev : 개발 진행과정을 전체적으로 관리하는 브랜치입니다. 
-    server-dev : 서버 관련된 작업을 관리하는 브랜치입니다. 작업 후에 dev로 머지하여 관리합니다.
-    front-dev : 프론트 관련 작업을 관리하는 브랜치입니다. 작업 후에 dev로 머지하여 관리합니다.
+* **main** : 팀 프로젝트에 필요한 문서들과 개발 완료된 버전들만 머지해서 관리합니다.
+  * **dev** : 개발 진행과정을 전체적으로 관리하는 브랜치입니다. 
+    * **server-dev** : 서버 관련된 작업을 관리하는 브랜치입니다. 작업 후에 dev로 머지하여 관리합니다.
+    * **front-dev** : 프론트 관련 작업을 관리하는 브랜치입니다. 작업 후에 dev로 머지하여 관리합니다.
 
 **개인 작업용 브랜치는 server-dev 혹은 front-dev에서만 만들고 머지해주세요**
 
@@ -60,9 +60,9 @@ example/path/project2-1team/server/ : npm start
 ```
 
 ## 📂 프로젝트 폴더 구조
-client/: React + TypeScript 프론트엔드 소스 코드
+client/: React + TypeScript 프론트엔드 소스 코드<br>
 
-server/: Node.js + TypeScript 백엔드 소스 코드
+server/: Node.js + TypeScript 백엔드 소스 코드<br>
 
 shared/: 서버와 클라이언트가 공통으로 사용하는 TypeScript 인터페이스(타입 명세) 정의 폴더
 
