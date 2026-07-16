@@ -14,8 +14,8 @@ export interface User {
   status: 'ACTIVE' | 'BANNED' | 'DELETED'; // VARCHAR(20) 유니온으로 정의
 }
 
-// 가상 메모리와 RDS가 공통으로 구현해야 할 저장소 명세서
+// 가상 메모리와 RDS가 공통으로 구현해야 할 저장소 명세서 (Mapper Interface)
 export interface UserRepository {
   findByEmail(email: string): Promise<User | null>; // 이메일로 유저 찾기
-  save(user: Omit<User, 'userId' | 'createdAt' | 'updatedAt'>): Promise<User>; // 회원 가입 
+  signUp(user: Omit<User, 'userId' | 'createdAt' | 'updatedAt'>): Promise<User>; // 회원 가입 
 }

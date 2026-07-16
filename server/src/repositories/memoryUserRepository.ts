@@ -3,15 +3,15 @@
 
 import { User, UserRepository } from './userRepository';
 
-export class MemoryUserRepository implements UserRepository {
+export class MemoryUserRepository implements UserRepository { // 인 메모리 Mapper 
   // 실제 DB 대신 유저 정보를 임시 저장할 메모리 Map
   private users = new Map<number, User>();
   private idCounter = 1;
 
   // 아이디(email)로 유저 검색
   async findByEmail(email: string): Promise<User | null> {
-    for (const user of this.users.values()) {
-      if (user.email === email) {
+    for (const user of this.users.values()) { // map을 순차 탐색
+      if (user.email === email) { // 동일한 이메일 검사
         return user;
       }
     }
