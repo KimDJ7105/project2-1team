@@ -18,4 +18,5 @@ export interface User {
 export interface UserRepository {
   findByEmail(email: string): Promise<User | null>; // 이메일로 유저 찾기
   signUp(user: Omit<User, 'userId' | 'createdAt' | 'updatedAt'>): Promise<User>; // 회원 가입 
+  update(userId: number, fieldsToUpdate: Partial<Omit<User, 'userId' | 'createdAt' | 'updatedAt'>>): Promise<User>; //회원 정보 수정
 }
