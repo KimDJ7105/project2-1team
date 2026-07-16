@@ -12,9 +12,15 @@ export interface DatabaseConfig {
   password?: string;
 }
 
+export interface RedisConfig { // redis 정보 
+  host: string;
+  port: number;
+}
+
 export interface AppConfig { // 환경 데이터
   env: string;
   database: DatabaseConfig;
+  redis: RedisConfig;
 }
 
 // YAML 전체를 담기 위한 타입 정의
@@ -41,5 +47,6 @@ const activeConfig: AppConfig = allConfigs[env as keyof RawYamlConfig] || allCon
 // 테스트용 로그
 console.log(`[Config] 현재 활성화된 환경 설정 프로필: ${env.toUpperCase()}`);
 console.log(`[Config] 데이터베이스 타입: ${activeConfig.database.type}`);
+console.log(`[Config] Redis 호스트 주소: ${activeConfig.redis.host}`); // 로그 추가
 
 export default activeConfig; 
