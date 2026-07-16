@@ -41,9 +41,14 @@
 
 server 폴더와 client 폴더 내부에서 각각 npm run dev 명령어를 사용하시면 됩니다.
 이를 위해서 2개의 터미널 창을 띄우셔야 합니다.
+  ```bash
+  example/path/project2-1team/server/ : npm run dev
+  example/path/project2-1team/client/ : npm run dev
+  ```
+
+npm start 명령어를 사용하여 서비스 모드로 서버를 실행할 수 있습니다.
 ```bash
-example/path/project2-1team/server/ : npm run dev
-example/path/project2-1team/client/ : npm run dev
+example/path/project2-1team/server/ : npm start
 ```
 
 ## 📂 프로젝트 폴더 구조
@@ -52,3 +57,7 @@ client/: React + TypeScript 프론트엔드 소스 코드
 server/: Node.js + TypeScript 백엔드 소스 코드
 
 shared/: 서버와 클라이언트가 공통으로 사용하는 TypeScript 인터페이스(타입 명세) 정의 폴더
+
+## 프로젝트 환경
+  dev : 개발시 사용, 서버 실행 명령어는 npm run dev. 인 메모리 DB 사용
+  prod : 서비스시 사용, 서버 실행 명령어는 npm start. AWS RDS 사용 
