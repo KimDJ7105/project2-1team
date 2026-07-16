@@ -2,14 +2,20 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import userRoutes from './routes/userRoutes'; // 라우터 가져오기
 
 const app = express();
 
-// 1. CORS 설정 (프론트엔드가 다른 포트에서 접근할 수 있도록 허용)
+// JSON 요청 본문을 해석하기 위한 미들웨어 설정 (필수!)
+app.use(express.json());
+
 app.use(cors({
-  origin: 'http://localhost:5173', // Vite 기본 포트 허용
+  origin: 'http://localhost:5173',
   credentials: true
 }));
+
+// API 라우터 등록
+app.use('/api/users', userRoutes);
 
 const httpServer = createServer(app);
 
