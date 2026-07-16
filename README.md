@@ -1,0 +1,54 @@
+# 🎮 증강 오목 (Augmented Gomoku) 개발 환경 가이드
+
+이 프로젝트는 **Node.js (TypeScript) 백엔드 서버**와 **React (Vite + TypeScript) 프론트엔드 클라이언트**로 구성된 실시간 멀티플레이어 게임 프로젝트입니다. 
+
+처음 개발에 참여하는 팀원분들은 아래 가이드를 순서대로 따라서 로컬 개발 환경을 구축해 주세요.
+
+---
+
+## 📋 1. 사전 준비물 (Pre-requisites)
+
+아무것도 설치되지 않은 PC라면 아래 두 프로그램을 먼저 설치해야 합니다.
+
+1. **Node.js 설치**
+   * [Node.js 공식 홈페이지](https://nodejs.org/)에서 LTS(Long Term Support) 버전을 다운로드하여 설치해 주세요. (v20 이상 권장)
+   * 설치가 완료되면 터미널(명령 프롬프트)에서 `node -v`와 `npm -v`를 입력해 정상적으로 설치되었는지 확인합니다.
+
+2. **Visual Studio Code (VS Code) 설치**
+   * 코드 편집기로 [VS Code](https://code.visualstudio.com/)를 권장합니다.
+   * VS Code를 설치한 후, 확장 프로그램(Extensions) 탭에서 아래 항목들을 필수로 설치해 주세요.
+     * **Prettier - Code formatter** (코드 스타일 자동 정렬)
+     * **Tailwind CSS IntelliSense** (디자인 클래스 자동 완성)
+
+---
+
+## 🛠️ 2. 저장소 복제 및 의존성 설치
+
+1. 저장소를 클론(Clone)하거나 폴더를 VS Code로 열어줍니다.
+   ```bash
+   # 깃 클론
+   git clone https://github.com/KimDJ7105/project2-1team.git
+   cd Project2-1team
+   # 서버 의존성 설치
+   cd server
+   npm install
+   # 클라이언트 의존성 설치
+   cd ../client
+   npm install
+   ```
+
+## 3. 서버 실행 및 테스트 방법
+
+server 폴더와 client 폴더 내부에서 각각 npm run dev 명령어를 사용하시면 됩니다.
+이를 위해서 2개의 터미널 창을 띄우셔야 합니다.
+```bash
+example/path/project2-1team/server/ : npm run dev
+example/path/project2-1team/client/ : npm run dev
+```
+
+## 📂 프로젝트 폴더 구조
+client/: React + TypeScript 프론트엔드 소스 코드
+
+server/: Node.js + TypeScript 백엔드 소스 코드
+
+shared/: 서버와 클라이언트가 공통으로 사용하는 TypeScript 인터페이스(타입 명세) 정의 폴더
