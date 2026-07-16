@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>증강오목</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --wood-1:#f6dfae;
+    --wood-2:#f2d29a;
+    --wood-line:#3d2c1a;
+    --stone-black-a:#5a5a5a;
+    --stone-black-b:#1c1c1c;
+    --stone-white-b:#d8d0c0;
+    --teal:#3ecfc0;
+    --teal-dark:#22988c;
+    --yellow:#ffcd4a;
+    --yellow-dark:#e0a400;
+    --text-main:#4a3823;
+    --text-sub:#93805f;
+    --card-bg:#fffaf0;
+    --card-border:#f0dfc0;
+    --danger:#e0654f;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{
+    font-family:'Gowun Dodum', sans-serif;
+    background:#e9e2d3;
+    color:var(--text-main);
+    min-height:100vh;
+    display:flex;
+    justify-content:center;
+  }
+  .phone{
+    width:100%;
+    max-width:430px;
+    min-height:100vh;
+    background:#fff7e8;
+    display:flex;
+    flex-direction:column;
+    box-shadow:0 0 40px #0000001a;
+    overflow:hidden;
+  }
+
+  /* ---------- TOP: BOARD HERO ---------- */
+  .board-panel{
+    position:relative;
+    height:38vh;
+    min-height:230px;
+    max-height:300px;
+    flex-shrink:0;
+    background:
+      radial-gradient(ellipse at 25% 10%, var(--wood-1) 0%, transparent 55%),
+      linear-gradient(150deg, var(--wood-1) 0%, var(--wood-2) 100%);
+    overflow:hidden;
+  }
+  .board-grid{
+    position:absolute;
+    inset:14px;
+    border-radius:16px;
+    background-image:
+      linear-gradient(var(--wood-line) 2px, transparent 2px),
+      linear-gradient(90deg, var(--wood-line) 2px, transparent 2px);
+    background-size:38px 38px;
+    opacity:.55;
+  }
+  .board-frame{
+    position:absolute;
+    inset:6px;
+    border-radius:20px;
+    border:8px solid #d9ad6e;
+    box-shadow:0 10px 24px -14px #8a5f2555, inset 0 2px 6px #ffffff70;
+    pointer-events:none;
+  }
+  .stone{
+    position:absolute;
+    width:26px;height:26px;
+    border-radius:50%;
+    opacity:0;
+    transform:scale(.2) translateY(-10px);
+    transition:opacity .35s ease, transform .45s cubic-bezier(.34,1.56,.64,1);
+  }
+  .stone.show{opacity:1; transform:scale(1) translateY(0);}
+  .stone.black{
+    background:radial-gradient(circle at 32% 26%, var(--stone-black-a), var(--stone-black-b) 72%);
+    box-shadow:0 4px 6px -2px #00000060;
+  }
+  .stone.white{
+    background:radial-gradient(circle at 32% 26%, #ffffff, var(--stone-white-b) 78%);
+    box-shadow:0 4px 6px -2px #00000030;
+  }
+  .stone.augmented::after{
+    content:"";
+    position:absolute;
+    inset:-6px;
+    border-radius:50%;
+    border:2.5px solid var(--teal);
+    box-shadow:0 0 8px 1px var(--teal);
+    animation:ring 2s ease-in-out infinite;
+  }
+  @keyframes ring{
+    0%,100%{opacity:.5; transform:scale(1);}
+    50%{opacity:1; transform:scale(1.1);}
+  }
+
+  /* brand text sits on its own solid card so grid lines never cross it */
+  .brand-card{
+    position:absolute;
+    left:14px; right:14px; bottom:14px;
+    z-index:3;
+    background:#fffaf0ee;
+    border:2px solid #ffffffb0;
+    border-radius:16px;
+    padding:14px 16px 16px;
+    box-shadow:0 8px 20px -10px #6b4a1f55;
+  }
+  .brand-card .eyebrow{
+    font-size:11.5px; font-weight:700; letter-spacing:.08em;
+    color:var(--teal-dark); margin:0 0 4px;
+  }
+  .brand-card h1{
+    font-family:'Jua', sans-serif;
+    font-size:30px;
+    line-height:1.1;
+    margin:0 0 6px;
+    color:var(--text-main);
+  }
+  .brand-card p{
+    font-size:12.5px; line-height:1.5; color:var(--text-sub); margin:0;
+  }
+
+  /* ---------- BOTTOM: AUTH ---------- */
+  .auth-panel{
+    flex:1;
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    padding:26px 22px 34px;
+    background:#fff7e8;
+  }
+  .auth-card{
+    position:relative;
+    width:100%;
+    max-width:340px;
+  }
+
+  .screen{display:none; flex-direction:column; gap:14px;}
+  .screen.active{display:flex;}
+
+  .icon-row{display:flex; justify-content:center; margin-bottom:2px;}
+  .mini-stone{width:24px;height:24px;border-radius:50%; margin:0 3px; display:inline-block;}
+  .mini-stone.b{background:radial-gradient(circle at 32% 26%, var(--stone-black-a), var(--stone-black-b) 72%);}
+  .mini-stone.w{background:radial-gradient(circle at 32% 26%, #fff, var(--stone-white-b) 78%); box-shadow:0 0 0 1px #e8dcc4;}
+
+  .panel-title{
+    font-family:'Jua', sans-serif;
+    font-size:21px;
+    text-align:center;
+    margin:6px 0 0;
+    color:var(--text-main);
+  }
+
+  form{display:flex; flex-direction:column; gap:12px; margin-top:6px;}
+  .field{display:flex; flex-direction:column; gap:4px;}
+  .field label{font-size:12px; color:var(--text-sub); font-weight:700;}
+  .field input{
+    background:#fffefb;
+    border:2px solid var(--card-border);
+    border-radius:12px;
+    padding:11px 13px;
+    font-size:14px;
+    font-family:'Gowun Dodum', sans-serif;
+    color:var(--text-main);
+    outline:none;
+    width:100%;
+    transition:border-color .15s, box-shadow .15s;
+  }
+  .field input::placeholder{color:#c7b391;}
+  .field input:focus{
+    border-color:var(--teal);
+    box-shadow:0 0 0 3px #3ecfc030;
+  }
+
+  .cute-btn{
+    margin-top:6px;
+    border:none;
+    border-radius:14px;
+    padding:13px;
+    font-size:15px;
+    font-family:'Jua', sans-serif;
+    letter-spacing:.02em;
+    color:#4a3823;
+    cursor:pointer;
+    background:var(--yellow);
+    box-shadow:0 5px 0 var(--yellow-dark);
+    transition:transform .08s, box-shadow .08s;
+    width:100%;
+  }
+  .cute-btn:active{transform:translateY(4px); box-shadow:0 1px 0 var(--yellow-dark);}
+  .cute-btn:focus-visible{outline:2px solid var(--teal-dark); outline-offset:2px;}
+  .cute-btn.teal{background:var(--teal); box-shadow:0 5px 0 var(--teal-dark); color:#0e3833;}
+
+  .form-msg{font-size:12px; min-height:14px; color:var(--danger); text-align:center;}
+  .form-msg.ok{color:var(--teal-dark);}
+
+  .switch-line{margin-top:2px; text-align:center; font-size:13px; color:var(--text-sub);}
+  .switch-line button{
+    background:none; border:none; color:var(--teal-dark); font-weight:700;
+    cursor:pointer; font-family:'Gowun Dodum', sans-serif; font-size:13px; padding:0;
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none !important; transition:none !important;}
+    .stone{opacity:1 !important; transform:none !important;}
+  }
+</style>
+</head>
+<body>
+<div class="phone">
+
+  <div class="board-panel">
+    <div class="board-grid"></div>
+    <div class="board-frame"></div>
+    <div id="stones"></div>
+
+    <div class="brand-card">
+      <p class="eyebrow">AUGMENTED OMOK</p>
+      <h1>증강오목</h1>
+      <p>다섯 알을 잇는 순간, 예상 못 한 한 수가 끼어듭니다.</p>
+    </div>
+  </div>
+
+  <div class="auth-panel">
+    <div class="auth-card">
+
+      <div class="screen active" id="screen-login">
+        <div class="icon-row">
+          <span class="mini-stone b"></span><span class="mini-stone w"></span>
+        </div>
+        <p class="panel-title">로그인</p>
+        <form id="login-form">
+          <div class="field">
+            <label for="login-email">이메일</label>
+            <input id="login-email" type="email" placeholder="you@example.com" required autocomplete="email">
+          </div>
+          <div class="field">
+            <label for="login-password">비밀번호</label>
+            <input id="login-password" type="password" placeholder="비밀번호" required autocomplete="current-password">
+          </div>
+          <p class="form-msg" id="login-msg" aria-live="polite"></p>
+          <button type="submit" class="cute-btn teal">로그인</button>
+        </form>
+        <p class="switch-line">계정이 없으신가요? <button onclick="goTo('signup')">회원가입</button></p>
+      </div>
+
+      <div class="screen" id="screen-signup">
+        <div class="icon-row">
+          <span class="mini-stone w"></span><span class="mini-stone b"></span>
+        </div>
+        <p class="panel-title">회원가입</p>
+        <form id="signup-form">
+          <div class="field">
+            <label for="signup-nickname">닉네임</label>
+            <input id="signup-nickname" type="text" placeholder="게임 닉네임" required maxlength="50">
+          </div>
+          <div class="field">
+            <label for="signup-email">이메일</label>
+            <input id="signup-email" type="email" placeholder="you@example.com" required autocomplete="email">
+          </div>
+          <div class="field">
+            <label for="signup-password">비밀번호</label>
+            <input id="signup-password" type="password" placeholder="8자 이상" required autocomplete="new-password" minlength="8">
+          </div>
+          <p class="form-msg" id="signup-msg" aria-live="polite"></p>
+          <button type="submit" class="cute-btn">회원가입</button>
+        </form>
+        <p class="switch-line">이미 계정이 있으신가요? <button onclick="goTo('login')">로그인</button></p>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+function goTo(name){
+  document.getElementById('screen-login').classList.toggle('active', name==='login');
+  document.getElementById('screen-signup').classList.toggle('active', name==='signup');
+}
+
+document.getElementById('login-form').addEventListener('submit', function(e){
+  e.preventDefault();
+  const msg = document.getElementById('login-msg');
+  msg.textContent = '데모 화면입니다. 서버 연동 후 실제 로그인이 동작해요.';
+  msg.classList.add('ok');
+});
+
+document.getElementById('signup-form').addEventListener('submit', function(e){
+  e.preventDefault();
+  const msg = document.getElementById('signup-msg');
+  msg.textContent = '데모 화면입니다. 서버 연동 후 실제 가입이 동작해요.';
+  msg.classList.add('ok');
+});
+
+/* 오목판 위 돌이 실제 대국처럼 순서대로 놓였다가 리셋되는 애니메이션
+   brand-card가 하단을 덮으므로, 돌은 카드 위쪽 영역(y 8~55%)에만 배치 */
+const sequence = [
+  {x:14,y:12,c:'black'},
+  {x:34,y:18,c:'white'},
+  {x:22,y:24,c:'black'},
+  {x:46,y:14,c:'white',aug:true},
+  {x:10,y:30,c:'black'},
+  {x:60,y:22,c:'white'},
+  {x:36,y:34,c:'black',aug:true},
+  {x:70,y:16,c:'white'},
+  {x:55,y:36,c:'black'},
+  {x:80,y:28,c:'white'}
+];
+const container = document.getElementById('stones');
+const els = sequence.map(s=>{
+  const el = document.createElement('div');
+  el.className = 'stone ' + s.c + (s.aug ? ' augmented' : '');
+  el.style.left = s.x + '%';
+  el.style.top = s.y + '%';
+  container.appendChild(el);
+  return el;
+});
+
+let i = 0;
+let timer;
+function step(){
+  if(i < els.length){
+    els[i].classList.add('show');
+    i++;
+    timer = setTimeout(step, 550);
+  } else {
+    timer = setTimeout(()=>{
+      els.forEach(el=>el.classList.remove('show'));
+      i = 0;
+      timer = setTimeout(step, 500);
+    }, 1600);
+  }
+}
+if(!window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+  step();
+} else {
+  els.forEach(el=>el.classList.add('show'));
+}
+</script>
+</body>
+</html>
