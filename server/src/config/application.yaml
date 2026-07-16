@@ -1,0 +1,14 @@
+# server/src/config/application.yaml
+development:
+  env: "dev" # 개발 환경
+  database:
+    type: "memory" # 로컬 개발 환경에서는 가상 메모리 저장소 작동
+
+production:
+  env: "prod" # 서비스 환경
+  database:
+    type: "mysql" # AWS에 배포되는 운영 환경에서는 AWS RDS(MySQL) 연동
+    host: "RDS 엔드포인트"
+    port: 3306
+    username: "admin"
+    password: "securepassword"

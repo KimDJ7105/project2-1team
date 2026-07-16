@@ -27,7 +27,7 @@ interface RawYamlConfig {
 const env = process.env.NODE_ENV || 'development';
 
 // 2. application.yaml 파일의 절대 경로를 계산
-const configPath = path.join(__dirname, 'application.yaml');
+const configPath = path.join(process.cwd(), 'src', 'config', 'application.yaml');
 
 // 3. 파일을 동기식으로 읽기
 const fileContents = fs.readFileSync(configPath, 'utf8');
