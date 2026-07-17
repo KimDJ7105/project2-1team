@@ -4,6 +4,7 @@
 import config from '../config/configLoader';
 import { UserRepository } from './userRepository';
 import { MemoryUserRepository } from './memoryUserRepository';
+import { MysqlUserRepository } from './mysqlUserRepository';
 
 let userRepository: UserRepository;
 
@@ -12,9 +13,8 @@ if (config.database.type === 'memory') {
   userRepository = new MemoryUserRepository();
   console.log('[Repository] 가상 메모리 유저 저장소가 활성화되었습니다.');
 } else {
-  // TODO: 추후 AWS RDS MySQL 연동 시 구현체 작성 예정
-  // userRepository = new MysqlUserRepository();
-  throw new Error('MySQL 저장소는 아직 구현되지 않았습니다. application.yaml의 설정을 memory로 유지해 주세요.');
+  userRepository = new MysqlUserRepository();
+  console.log('[Repository] mySQL 저장소가 활성화되었습니다.');
 }
 
 export { userRepository };

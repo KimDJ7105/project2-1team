@@ -8,13 +8,14 @@ development:
     port: 6379
 
 production:
-  env: "prod" # 서비스 환경
+  env: "prod"
   database:
-    type: "mysql" # AWS에 배포되는 운영 환경에서는 AWS RDS(MySQL) 연동
-    host: "RDS 엔드포인트"
-    port: 3306
-    username: "admin"
-    password: "securepassword"
+    type: "mysql"
+    host: ${DB_HOST:127.0.0.1}
+    port: ${DB_PORT:3306}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:dhkdTlqfl0509^}
+    database: ${DB_NAME:testdb}
   redis:
-    host: "AWS_ELASTICACHE_ENDPOINT_HERE"
-    port: 6379
+    host: ${REDIS_HOST:AWS_ELASTICACHE_ENDPOINT_HERE}
+    port: ${REDIS_PORT:6379}

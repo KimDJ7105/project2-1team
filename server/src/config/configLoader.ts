@@ -10,6 +10,7 @@ export interface DatabaseConfig {
   port?: number;
   username?: string;
   password?: string;
+  database?: string;
 }
 
 export interface RedisConfig { // redis 정보 

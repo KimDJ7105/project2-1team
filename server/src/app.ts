@@ -1,4 +1,5 @@
 import express from 'express';
+import { initializeDatabase } from './repositories/mysqlClient';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
@@ -48,10 +49,23 @@ io.on('connection', (socket) => {
   });
 });
 
-// 4. 8080 포트에서 서버 구동
-const PORT = 8080;
-httpServer.listen(PORT, () => {
-  console.log(`=========================================`);
-  console.log(`[Server] 오목 백엔드 서버 가동 중! (포트: ${PORT})`);
-  console.log(`=========================================`);
-});
+// 데이터베이스 초기화 및 서버 구동을 위한 비동기 래퍼 함수
+async function startServer() {
+  try {
+    // 서버가 켜지기 직전에 DB 커넥션 풀을 만들고 schema.sql을 실행
+    await initializeDatabase();
+    console.log('[Server] 데이터베이스 초기화 및 스키마 동기화 완료.');
+
+    const PORT = 8080;
+    httpServer.listen(PORT, () => {
+      console.log(`=========================================`);
+      console.log(`[Server] 오목 백엔드 서버 가동 중! (포트: ${PORT})`);
+      console.log(`=========================================`);
+    });
+  } catch (error) {
+    console.error('[Server] 서버 구동 중 치명적인 오류가 발생했습니다:', error);
+    process.exit(1); // 초기화 실패 시 프로세스 종료
+  }
+}
+
+startServer();

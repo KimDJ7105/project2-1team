@@ -58,7 +58,7 @@ export class UserService {
     });
 
     // 비밀번호를 제외한 유저 프로필 반환
-    const { password: _, ...userWithoutPassword } = user;
+    const { password: _, ...userWithoutPassword } = updatedUser;
     return userWithoutPassword;
   }
 }
