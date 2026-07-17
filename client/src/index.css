@@ -1,3 +1,16 @@
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap" rel="stylesheet">
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #e9e2d3 !important; /* 원본의 옅은 베이지 바탕색 */
+  font-family: 'Gowun Dodum', sans-serif !important;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+}
+
+/* 이 아래는 Vite가 만든 기본 값*/
 :root {
   --text: #6b6375;
   --text-h: #08060d;

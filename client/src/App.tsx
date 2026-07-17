@@ -1,20 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { io, Socket } from 'socket.io-client';
-import AuthForm from './components/AuthForm';
+import AuthPage from './pages/AuthPage';
 
 export default function App() {
-  // 1. 로그인한 유저 정보를 담아둘 상태 변수
   const [user, setUser] = useState<any>(null);
-  
-  // 2. 기존 소켓 상태 및 로그들
   const [socket, setSocket] = useState<Socket | null>(null);
   const [log, setLog] = useState<string>('소켓 연결을 대기 중입니다...');
 
-  // 사용자가 로그인을 완료하면 유저 정보를 세팅하고 소켓 연결을 수립합니다.
-  useEffect(() => {
-    if (!user) return; // 로그인 전에는 소켓을 연결하지 않습니다.
+  const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8080';
 
-    const socketInstance = io('http://localhost:8080', {
+  useEffect(() => {
+    if (!user) return;
+
+    // 소켓 연결
+    const socketInstance = io(API_BASE_URL, {
       withCredentials: true,
     });
 
@@ -32,13 +31,11 @@ export default function App() {
 
     setSocket(socketInstance);
 
-    // 컴포넌트 언마운트 시 소켓 연결 해제
     return () => {
       socketInstance.disconnect();
     };
-  }, [user]);
+  }, [user, API_BASE_URL]);
 
-  // 서버로 테스트 패킷 신호를 보낼 버튼 핸들러
   const handleTestClick = () => {
     if (socket) {
       socket.emit('test_click', { 
@@ -48,7 +45,6 @@ export default function App() {
     }
   };
 
-  // 로그아웃 처리
   const handleLogout = () => {
     setUser(null);
     if (socket) {
@@ -56,18 +52,16 @@ export default function App() {
     }
     setSocket(null);
     setLog('소켓 연결을 대기 중입니다...');
+    localStorage.removeItem('accessToken');
   };
 
   return (
     <div style={styles.appContainer}>
-      <h1 style={styles.mainTitle}>실시간 오목 게임 테스트</h1>
-
       {!user ? (
-        // 로그인 전: 가벼운 Auth UI 노출
-        <AuthForm onAuthSuccess={(loggedInUser) => setUser(loggedInUser)} />
+        <AuthPage onAuthSuccess={(loggedInUser) => setUser(loggedInUser)} />
       ) : (
-        // 로그인 완료 후: 소켓 테스트 및 로그아웃 기능 화면 노출
         <div style={styles.gameArea}>
+          <h1 style={styles.mainTitle}>실시간 오목 게임 테스트</h1>
           <div style={styles.profileHeader}>
             <p><strong>접속자:</strong> {user.nickname} ({user.email})</p>
             <button onClick={handleLogout} style={styles.logoutButton}>로그아웃</button>
@@ -88,20 +82,23 @@ export default function App() {
 
 const styles = {
   appContainer: {
-    fontFamily: 'sans-serif',
-    maxWidth: '600px',
+    fontFamily: "'Gowun Dodum', sans-serif",
+    width: '100%',
     margin: '0 auto',
-    padding: '20px',
   },
   mainTitle: {
     textAlign: 'center' as const,
     color: '#333',
+    fontSize: '22px',
+    marginBottom: '15px',
   },
   gameArea: {
     border: '1px solid #ddd',
     padding: '20px',
     borderRadius: '8px',
     backgroundColor: '#fafafa',
+    maxWidth: '600px',
+    margin: '40px auto 0',
   },
   profileHeader: {
     display: 'flex',
