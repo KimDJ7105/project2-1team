@@ -6,7 +6,7 @@ interface AuthFormProps {
 }
 
 export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
-  // isRegister가 true면 회원가입 모드, false면 로그인 모드입니다.
+  // isRegister가 true면 회원가입 모드, false면 로그인 모드
   const [isRegister, setIsRegister] = useState<boolean>(false);
   
   const [email, setEmail] = useState<string>('');

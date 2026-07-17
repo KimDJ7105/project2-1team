@@ -33,7 +33,7 @@ export class MemoryUserRepository implements UserRepository { // 인 메모리 M
     this.users.set(newUserId, newUser);
     return newUser;
   }
-  
+
   // 정보 수정
   async update(userId: number, fieldsToUpdate: Partial<Omit<User, 'userId' | 'createdAt' | 'updatedAt'>>): Promise<User> {
     const user = this.users.get(userId);
@@ -41,7 +41,7 @@ export class MemoryUserRepository implements UserRepository { // 인 메모리 M
       throw new Error('존재하지 않는 사용자입니다.');
     }
 
-    // 기존 데이터에 변경된 필드만 덮어쓰고, 수정일(updatedAt)을 갱신합니다.
+    // 기존 데이터에 변경된 필드만 덮어쓰고, 수정일을 갱신
     const updatedUser: User = {
       ...user,
       ...fieldsToUpdate,
