@@ -6,6 +6,7 @@ development:
   redis:
     host: "localhost"
     port: 6379
+    password: ""
 
 production:
   env: "prod"
@@ -17,5 +18,6 @@ production:
     password: ${DB_PASSWORD:dhkdTlqfl0509^}
     database: ${DB_NAME:testdb}
   redis:
-    host: ${REDIS_HOST:AWS_ELASTICACHE_ENDPOINT_HERE}
+    host: ${REDIS_HOST:localhost}
     port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}

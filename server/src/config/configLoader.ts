@@ -16,6 +16,7 @@ export interface DatabaseConfig {
 export interface RedisConfig { // redis 정보 
   host: string;
   port: number;
+  password?: string;
 }
 
 export interface AppConfig { // 환경 데이터
