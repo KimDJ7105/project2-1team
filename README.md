@@ -47,6 +47,12 @@
 
 ## 3. 서버 실행 및 테스트 방법
 
+프로젝트에 Redis가 추가됨에 따라 로컬 실행시 docker로 redis를 실행시켜줘야 합니다.<br>
+다음 명령어를 이용해서 docker에 Redis를 띄워주세요
+```bash
+ docker run -d --name local-redis -p 6379:6379 redis:alpine
+```
+
 server 폴더와 client 폴더 내부에서 각각 npm run dev 명령어를 사용하시면 됩니다.
 이를 위해서 2개의 터미널 창을 띄우셔야 합니다.
   ```bash
