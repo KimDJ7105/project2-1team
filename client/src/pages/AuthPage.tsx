@@ -1,3 +1,4 @@
+// client/src/pages/AuthPage.tsx
 import React, { useState, useEffect } from 'react';
 import LoginForm from '../components/auth/LoginForm';
 import SignupForm from '../components/auth/SignupForm';
@@ -33,7 +34,7 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
     }
 
     let i = 0;
-    let timer: NodeJS.Timeout;
+    let timer: ReturnType<typeof setTimeout>;
 
     const step = () => {
       if (i < sequence.length) {

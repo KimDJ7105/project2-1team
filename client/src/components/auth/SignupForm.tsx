@@ -1,3 +1,4 @@
+// client/src/components/auth/SignupForm.tsx
 import React, { useState } from 'react';
 
 interface SignupFormProps {

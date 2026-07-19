@@ -1,3 +1,4 @@
+/*server/src/repositories/mysqlClient.ts */
 import mysql from 'mysql2/promise';
 import fs from 'fs';
 import path from 'path';
@@ -6,13 +7,14 @@ import config from '../config/configLoader';
 let pool: mysql.Pool | null = null;
 
 // 데이터베이스 풀 초기화 및 스키마 자동 생성 함수
-export async function initializeDatabase(): Promise<mysql.Pool> {
+export async function initializeDatabase(): Promise<mysql.Pool | null> {
   if (pool) return pool;
 
   const dbConfig = config.database;
 
   if (dbConfig.type !== 'mysql') {
-    throw new Error('[DB] 현재 환경 설정이 mysql이 아닙니다.');
+    console.log(`[DB] 현재 데이터베이스 타입이 '${dbConfig.type}'이므로 MySQL 초기화를 건너뜁니다.`);
+    return null;
   }
 
   console.log('[DB] MySQL 데이터베이스 연결 풀을 생성합니다...');

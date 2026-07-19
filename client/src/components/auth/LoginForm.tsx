@@ -1,3 +1,4 @@
+// client/src/components/auth/LoginForm.tsx
 import React, { useState } from 'react';
 
 interface LoginFormProps {
@@ -40,7 +41,10 @@ export default function LoginForm({ onSwitch, onAuthSuccess }: LoginFormProps) {
       setIsError(false);
 
       setTimeout(() => {
-        onAuthSuccess(data.user);
+        onAuthSuccess({
+          ...data.user,
+          token: data.token
+        });
       }, 1000);
 
     } catch (error: any) {

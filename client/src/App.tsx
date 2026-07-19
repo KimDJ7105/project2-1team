@@ -1,3 +1,4 @@
+// client/src/app.tsx
 import React, { useState, useEffect } from 'react';
 import { io, Socket } from 'socket.io-client';
 import AuthPage from './pages/AuthPage';
@@ -11,14 +12,30 @@ export default function App() {
 
   useEffect(() => {
     if (!user) return;
+    
+    const currentToken = user.token || localStorage.getItem('accessToken');
+
+    if (!currentToken || currentToken === 'undefined') {
+      console.log(`[소켓 에러]: 유효한 토큰을 찾을 수 없습니다. 다시 시도해 주세요.`);
+      return;
+    }
+
+    console.log('소켓 연결 시도 토큰 수신 확인:', currentToken);
 
     // 소켓 연결
     const socketInstance = io(API_BASE_URL, {
       withCredentials: true,
+      auth: {
+        token: currentToken
+      }
     });
 
     socketInstance.on('connect', () => {
       setLog(`[소켓 연결 완료] ${user.nickname}님 환영합니다! (ID: ${socketInstance.id})`);
+    });
+
+    socketInstance.on('connect_error', (err) => {
+      setLog((prev) => `${prev}\n[소켓 연결 에러]: ${err.message}`);
     });
 
     socketInstance.on('test_response', (data: { message: string }) => {

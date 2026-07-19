@@ -1,3 +1,4 @@
+// // server/src/sessions/redisSessionManager.ts
 import Redis from 'ioredis';
 import crypto from 'crypto';
 import { ISessionManager } from './sessionManager.interface';
@@ -24,11 +25,11 @@ export class RedisSessionManager implements ISessionManager {
   }
 
   // 세션 생성: 토큰을 UUID 등으로 생성하고 Redis에 JSON 문자열로 저장
-  async createSession(userId: string, data: Record<string, any>, ttlSeconds: number): Promise<string> {
+  async createSession(email: string, data: Record<string, any>, ttlSeconds: number): Promise<string> {
     const sessionId = crypto.randomBytes(32).toString('hex');
     
     const sessionData = {
-      userId,
+      email,
       ...data,
       createdAt: new Date().toISOString(),
     };
@@ -61,3 +62,6 @@ export class RedisSessionManager implements ISessionManager {
     await this.redisClient.expire(`session:${sessionId}`, ttlSeconds);
   }
 }
+
+//싱글톤
+export const redisSessionManager = new RedisSessionManager();

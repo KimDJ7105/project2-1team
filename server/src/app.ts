@@ -4,6 +4,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import userRoutes from './routes/userRoutes'; // 라우터 가져오기
+import { socketAuthMiddleware, AuthenticatedSocket } from './sessions/socketAuth';
 
 const app = express();
 
@@ -29,9 +30,16 @@ const io = new Server(httpServer, {
   }
 });
 
-// 3. 실시간 소켓 통신 이벤트 리스너 정의
-io.on('connection', (socket) => {
-  console.log(`[Server] 누군가 무전기 채널에 접속했습니다! (소켓 ID: ${socket.id})`);
+// Socket.io 전용 인증 미들웨어 장착
+io.use(socketAuthMiddleware);
+
+// 3. 실시간 소켓 통신 이벤트 리스너 정의 (인증을 통과한 소켓만 들어옴)
+io.on('connection', (socket: AuthenticatedSocket) => {
+  // 인증 미들웨어에서 바인딩한 유저 정보 추출
+  const userEmail = socket.user?.email;
+  const userNickname = socket.user?.nickname;
+
+  console.log(`[Server] 유저 ${userNickname}(${userEmail}) 님이 무전기 채널에 접속했습니다! (소켓 ID: ${socket.id})`);
 
   // 클라이언트가 'test_click'이라는 신호를 무전으로 보냈을 때 반응하는 곳
   socket.on('test_click', (data) => {
@@ -45,7 +53,7 @@ io.on('connection', (socket) => {
 
   // 접속이 끊겼을 때
   socket.on('disconnect', () => {
-    console.log(`[Server] 접속이 끊겼습니다. (소켓 ID: ${socket.id})`);
+    console.log(`[Server] 유저 ${userNickname} 님의 접속이 끊겼습니다. (소켓 ID: ${socket.id})`);
   });
 });
 
