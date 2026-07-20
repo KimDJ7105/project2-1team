@@ -4,11 +4,15 @@ import { io, Socket } from 'socket.io-client';
 import AuthPage from './pages/AuthPage';
 import { LobbyPage } from './pages/LobbyPage';
 import { getMeAPI, logoutAPI } from './api/auth';
+import { GamePage } from './pages/GamePage';
 
 export default function App() {
   const [user, setUser] = useState<any>(null);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // 현재 입장한 방 상태 관리 (null이면 로비, 객체가 있으면 게임방)
+  const [currentRoom, setCurrentRoom] = useState<{ roomId: string; roomTitle: string } | null>(null);
 
   const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8080';
 
@@ -90,6 +94,7 @@ export default function App() {
     }
 
     setUser(null);
+    setCurrentRoom(null);
     if (socket) {
       socket.disconnect();
     }
@@ -106,11 +111,20 @@ export default function App() {
     <div style={styles.appContainer}>
       {!user ? (
         <AuthPage onAuthSuccess={(loggedInUser) => setUser(loggedInUser)} />
-      ) : (
+      ) : !currentRoom ? (
         <LobbyPage
           socket={socket}
           user={user}
           onLogout={handleLogout}
+          onJoinSuccess={(roomInfo) => setCurrentRoom(roomInfo)}
+        />
+      ) : (
+        <GamePage
+          socket={socket}
+          roomId={currentRoom.roomId}
+          roomTitle={currentRoom.roomTitle}
+          user={user}
+          onLeave={() => setCurrentRoom(null)}
         />
       )}
     </div>
