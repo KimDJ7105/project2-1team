@@ -1,7 +1,6 @@
 // client/src/api/auth.ts
 // 회원가입 및 로그인을 처리하는 api 
 
-
 import axios from 'axios';
 
 // 백엔드 Express 서버 주소를 베이스 URL로 설정
@@ -41,6 +40,7 @@ export interface UserResponse {
 // 서버 응답의 공통 포맷 정의
 export interface AuthResponse {
   message: string;
+  token?: string;
   user: UserResponse;
 }
 
@@ -53,5 +53,15 @@ export const registerAPI = async (data: RegisterRequest): Promise<AuthResponse> 
 // 2. 로그인 API 호출 함수
 export const loginAPI = async (data: LoginRequest): Promise<AuthResponse> => {
   const response = await API.post<AuthResponse>('/login', data);
+  return response.data;
+};
+
+// 4. 세션 검증 API 호출 
+export const getMeAPI = async (token: string): Promise<AuthResponse> => {
+  const response = await API.get('/me', {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
   return response.data;
 };

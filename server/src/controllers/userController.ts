@@ -49,7 +49,10 @@ export class UserController {
       // Redis 세션 데이터 생성 (소켓 검증 등에서 유저 식별에 쓸 데이터 기입)
       const sessionId = await redisSessionManager.createSession(
         user.email,
-        { nickname: user.nickname },
+        { 
+          email: user.email, 
+          nickname: user.nickname 
+        },
         ttlSeconds
       );
 
@@ -87,6 +90,7 @@ export class UserController {
     }
   }
 
+  //4. 토큰 검색 처리 
   async getMe(req: Request, res: Response): Promise<void> {
     try {
       const authHeader = req.headers.authorization;
@@ -107,7 +111,10 @@ export class UserController {
 
       // 세션에 저장되어 있던 유저 정보 반환
       res.status(200).json({
-        user: sessionData.user,
+        user: {
+          email: sessionData.email,
+          nickname: sessionData.nickname
+        }
       });
     } catch (error: any) {
       console.error('[GetMe Error]:', error);

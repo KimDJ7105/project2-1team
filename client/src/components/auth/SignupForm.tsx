@@ -1,5 +1,6 @@
 // client/src/components/auth/SignupForm.tsx
 import React, { useState } from 'react';
+import { registerAPI } from '../../api/auth';
 
 interface SignupFormProps {
   onSwitch: () => void;
@@ -20,36 +21,18 @@ export default function SignupForm({ onSwitch }: SignupFormProps) {
     setIsError(false);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/users/register`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ nickname, email, password }),
-      });
+      await registerAPI({ nickname, email, password });
 
-      // 응답의 Content-Type 헤더 확인
-      const contentType = response.headers.get('content-type');
+      setMessage('회원가입이 완료되었습니다! 로그인해 주세요.');
+      setIsError(false);
       
-      if (contentType && contentType.includes('application/json')) {
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.message || '회원가입에 실패했습니다.');
-        }
-        setMessage('회원가입이 완료되었습니다! 로그인해 주세요.');
-        setIsError(false);
-        setTimeout(() => {
-          onSwitch();
-        }, 1500);
-      } else {
-        // 백엔드가 JSON이 아닌 HTML 등의 텍스트를 반환했을 때의 처리
-        const rawText = await response.text();
-        console.error('서버로부터 비정상적인 응답 수신:', rawText);
-        throw new Error(`서버 에러가 발생했습니다. (상태 코드: ${response.status}). 주소나 서버 설정을 확인해 주세요.`);
-      }
+      setTimeout(() => {
+        onSwitch();
+      }, 1500);
 
     } catch (error: any) {
-      setMessage(error.message);
+      const errorMessage = error.response?.data?.message || error.message || '회원가입에 실패했습니다.';
+      setMessage(errorMessage);
       setIsError(true);
     }
   };

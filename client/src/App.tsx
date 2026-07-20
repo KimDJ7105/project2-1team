@@ -2,13 +2,46 @@
 import React, { useState, useEffect } from 'react';
 import { io, Socket } from 'socket.io-client';
 import AuthPage from './pages/AuthPage';
+import { getMeAPI } from './api/auth';
 
 export default function App() {
   const [user, setUser] = useState<any>(null);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [log, setLog] = useState<string>('소켓 연결을 대기 중입니다...');
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8080';
+
+  useEffect(() => {
+    const restoreSession = async () => {
+      const savedToken = localStorage.getItem('accessToken');
+      
+      if (!savedToken || savedToken === 'undefined') {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        // 서버의 /api/users/me 창구로 데이터 요청
+        const data = await getMeAPI(savedToken);
+        
+        if (data && data.user) {
+          setUser({
+            ...data.user,
+            token: savedToken
+          });
+        }
+      } catch (error) {
+        console.error('세션 복구 실패(만료되었거나 잘못된 토큰):', error);
+        // 토큰이 만료되었거나 비정상적이면 보관함 비우기
+        localStorage.removeItem('accessToken');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    restoreSession();
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -71,6 +104,10 @@ export default function App() {
     setLog('소켓 연결을 대기 중입니다...');
     localStorage.removeItem('accessToken');
   };
+
+  if (isLoading) {
+    return <div style={{ padding: '20px', textAlign: 'center' }}>인증 정보를 확인 중입니다...</div>;
+  }
 
   return (
     <div style={styles.appContainer}>

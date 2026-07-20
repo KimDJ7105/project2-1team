@@ -1,5 +1,6 @@
 // client/src/components/auth/LoginForm.tsx
 import React, { useState } from 'react';
+import { loginAPI } from '../../api/auth';
 
 interface LoginFormProps {
   onSwitch: () => void;
@@ -21,21 +22,11 @@ export default function LoginForm({ onSwitch, onAuthSuccess }: LoginFormProps) {
     setIsError(false);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/users/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
+      const data = await loginAPI({ email, password });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || '로그인에 실패했습니다.');
+      if (data.token) {
+        localStorage.setItem('accessToken', data.token);
       }
-
-      localStorage.setItem('accessToken', data.token);
       
       setMessage('로그인에 성공했습니다! 잠시 후 이동합니다.');
       setIsError(false);
@@ -48,7 +39,8 @@ export default function LoginForm({ onSwitch, onAuthSuccess }: LoginFormProps) {
       }, 1000);
 
     } catch (error: any) {
-      setMessage(error.message);
+      const errorMessage = error.response?.data?.message || error.message || '로그인에 실패했습니다.';
+      setMessage(errorMessage);
       setIsError(true);
     }
   };
