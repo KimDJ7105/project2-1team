@@ -8,6 +8,7 @@ import { socketAuthMiddleware, AuthenticatedSocket } from './sessions/socketAuth
 import { disconnectTimerManager } from './sessions/disconnectTimerManager';
 import { redisSessionManager } from './sessions/redisSessionManager';
 import { SCRoomSummary } from './shared/types/game_data';
+import { gameRoomManager } from './rooms/GameRoom';
 
 
 const app = express();
@@ -116,6 +117,13 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     // 방 제목과 난수를 조합하여 고유한 방 ID 생성
     const roomId = `${titleValue}_${randomId}`;
 
+    // 메모리에 룸 인스턴스 생성 및 생성자 참가 처리
+    const roomInstance = gameRoomManager.createRoom(roomId, titleValue);
+    if (userEmail && userNickname) {
+      roomInstance.addPlayer(userEmail, userNickname, socket.id);
+      socket.join(roomId); // Socket.io 룸 채널 입장
+    }
+
     // 클라이언트의 Room 인터페이스와 일치하는 객체 생성
     const newRoom = {
       roomId: roomId,
@@ -136,17 +144,60 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       console.error('방 생성 에러:', err);
     }
   });
-});
 
-// 테스트용
-async function seedData() {
-  await redisSessionManager.saveRoom('room_1', {
-    roomId: 'room_1',
-    roomTitle: '테스트 방 1',
-    playerCount: 1,
-    status: 'waiting'
+  // 방 참가 이벤트 처리 
+  socket.on('room:join', async (data: { roomId: string }) => {
+    try {
+      const { roomId } = data;
+      if (!userEmail || !userNickname) {
+        socket.emit('room:join:fail', { message: '인증 정보가 없습니다.' });
+        return;
+      }
+
+      // 1. 메모리에서 룸 인스턴스 조회
+      const roomInstance = gameRoomManager.getRoom(roomId);
+      if (!roomInstance) {
+        socket.emit('room:join:fail', { message: '존재하지 않거나 이미 종료된 방입니다.' });
+        return;
+      }
+
+      // 2. 룸 인스턴스에 플레이어 추가 시도 (인원 초과 시 false 반환)
+      const success = roomInstance.addPlayer(userEmail, userNickname, socket.id);
+      if (!success) {
+        socket.emit('room:join:fail', { message: '방 인원이 가득 찼습니다.' });
+        return;
+      }
+
+      // 3. Socket.io 룸 채널 입장
+      socket.join(roomId);
+
+      // 4. Redis의 방 정보 업데이트 (참가자 수 동기화)
+      const updatedRoom = {
+        roomId: roomInstance.roomId,
+        roomTitle: roomInstance.roomTitle,
+        playerCount: roomInstance.players.size,
+        status: roomInstance.status
+      };
+      await redisSessionManager.saveRoom(roomId, updatedRoom);
+
+      // 5. 입장 성공 알림 및 해당 방에 입장 완료 데이터 전송
+      socket.emit('room:join:success', { 
+        roomId: roomInstance.roomId, 
+        roomTitle: roomInstance.roomTitle 
+      });
+    
+      // 6. 전체 로비 유저들에게 변경된 인원수 반영을 위해 방 목록 다시 전송
+      const roomsData = await redisSessionManager.getAllRooms();
+      const roomList = roomsData.map((roomStr: string) => JSON.parse(roomStr));
+      io.emit('room:list', roomList);
+
+      console.log(`[Room] ${userNickname}(${userEmail}) 님이 방(${roomId})에 입장했습니다.`);
+    } catch (err) {
+      console.error('방 입장 처리 중 오류:', err);
+      socket.emit('room:join:fail', { message: '방 입장 처리 중 서버 오류가 발생했습니다.' });
+    }
   });
-}
+});
 
 // 데이터베이스 초기화 및 서버 구동을 위한 비동기 래퍼 함수
 async function startServer() {
@@ -161,8 +212,6 @@ async function startServer() {
       console.log(`[Server] 오목 백엔드 서버 가동 중! (포트: ${PORT})`);
       console.log(`=========================================`);
     });
-
-    seedData();
   } catch (error) {
     console.error('[Server] 서버 구동 중 치명적인 오류가 발생했습니다:', error);
     process.exit(1); // 초기화 실패 시 프로세스 종료
