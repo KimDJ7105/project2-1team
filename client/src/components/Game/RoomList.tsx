@@ -10,6 +10,8 @@ interface RoomListProps {
 }
 
 export const RoomList: React.FC<RoomListProps> = ({ rooms, onJoinRoom }) => {
+    console.log('현재 전달받은 방 목록:', rooms);
+
   if (!rooms || rooms.length === 0) {
     return (
       <div className="text-center muted" style={{ padding: '20px' }}>
@@ -19,7 +21,13 @@ export const RoomList: React.FC<RoomListProps> = ({ rooms, onJoinRoom }) => {
   }
 
   return (
-    <div className="room-list">
+    <div className="room-list" 
+    style={{ 
+        maxHeight: '320px', 
+        overflowY: 'auto', 
+        paddingRight: '4px' 
+      }}
+    >
       {rooms.map((room) => (
         <RoomItem key={room.roomId} room={room} onJoin={onJoinRoom} />
       ))}

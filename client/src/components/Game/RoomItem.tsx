@@ -9,8 +9,10 @@ interface RoomItemProps {
 }
 
 export const RoomItem: React.FC<RoomItemProps> = ({ room, onJoin }) => {
-  const isFull = room.currentPlayers >= room.maxPlayers;
-  const statusIcon = isFull ? '🔒' : room.isPrivate ? '🔑' : '➕';
+  const isFull = room.playerCount === 2;
+  const statusIcon = isFull ? '🔒' : '➕';
+
+  const roomTag = room.roomId.split('_').pop() || '';
 
   return (
     <div
@@ -18,10 +20,13 @@ export const RoomItem: React.FC<RoomItemProps> = ({ room, onJoin }) => {
       onClick={() => !isFull && onJoin(room.roomId)}
     >
       <span className="name">
-        {statusIcon} {room.title}
+        {statusIcon} {room.roomTitle}
+        <span style={{ color: '#888', fontSize: '0.85em', marginLeft: '6px', fontWeight: 500 }}>
+          #{roomTag}
+        </span>
       </span>
       <span className="count">
-        {room.currentPlayers} / {room.maxPlayers}
+        {room.playerCount} / 2
       </span>
     </div>
   );
