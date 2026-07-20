@@ -24,7 +24,16 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout }) 
   useEffect(() => {
     if (!socket) return;
     socket.on('room:list', (list: Room[]) => setRooms(list));
-    requestRoomList();
+    // 소켓이 연결되어있으면 바로 리스트 요청
+    if (socket.connected) {
+        requestRoomList();
+    }
+    // 소켓이 연결되면 리스트를 불러오도록 이벤트 등록 
+    const handleConnect = () => {
+        requestRoomList();
+    };
+    socket.on('connect', handleConnect);
+
     return () => { socket.off('room:list'); };
   }, [socket, requestRoomList]);
 

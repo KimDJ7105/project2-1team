@@ -3,11 +3,10 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 
 export interface Room {
-  roomId: string;
-  title: string;
-  currentPlayers: number;
-  maxPlayers: number;
-  isPrivate?: boolean;
+  roomId: string;   // 방 ID
+  roomTitle: string;    // 방제
+  playerCount: number; // 플레이어 수, 1 또는 2
+  status: 'waiting' | 'playing'; // 방 상태
 }
 
 export const useSocket = (token: string | null) => {
