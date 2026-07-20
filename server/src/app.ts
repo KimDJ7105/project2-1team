@@ -120,6 +120,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     // 메모리에 룸 인스턴스 생성 및 생성자 참가 처리
     const roomInstance = gameRoomManager.createRoom(roomId, titleValue);
     if (userEmail && userNickname) {
+      console.log('서버: 방 생성 성공 이벤트 발송 테스트', roomId);
       roomInstance.addPlayer(userEmail, userNickname, socket.id);
       socket.join(roomId); // Socket.io 룸 채널 입장
     }
@@ -132,6 +133,11 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       status: 'waiting'
     };
 
+    socket.emit('room:join:success', { 
+      roomId: roomId, 
+      roomTitle: titleValue 
+    });
+
     // Redis에 방 데이터 저장
     await redisSessionManager.saveRoom(roomId, newRoom);
 
@@ -143,6 +149,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     } catch (err) {
       console.error('방 생성 에러:', err);
     }
+
   });
 
   // 방 참가 이벤트 처리 

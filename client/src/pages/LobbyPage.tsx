@@ -11,9 +11,10 @@ interface LobbyPageProps {
   socket: Socket | null;
   user: { nickname: string; email: string };
   onLogout: () => void;
+  onJoinSuccess: (roomInfo: { roomId: string; roomTitle: string }) => void;
 }
 
-export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout }) => {
+export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout, onJoinSuccess }) => {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
@@ -34,8 +35,24 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout }) 
     };
     socket.on('connect', handleConnect);
 
-    return () => { socket.off('room:list'); };
-  }, [socket, requestRoomList]);
+    // 방 입장 이벤트 리스너 
+    const handleJoinSuccess = (data: { roomId: string; roomTitle: string }) => {
+      setShowCreateModal(false);
+      onJoinSuccess(data);
+    };
+
+    const handleJoinFail = (data: { message: string }) => {
+      alert(`방 입장 실패: ${data.message}`);
+    };
+
+    socket.on('room:join:success', handleJoinSuccess);
+    socket.on('room:join:fail', handleJoinFail);
+
+    return () => { socket.off('room:list'); 
+      socket.off('connect', handleConnect);
+      socket.off('room:join:success', handleJoinSuccess);
+      socket.off('room:join:fail', handleJoinFail);};
+  }, [socket, requestRoomList, onJoinSuccess]);
 
   const handleCreateRoom = () => {
     setShowCreateModal(true);
@@ -43,7 +60,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout }) 
 
   const handleModalCreate = (title: string) => {
     if (title && socket) socket.emit('room:create', { title });
-    setShowCreateModal(false);
+    //setShowCreateModal(false);
   };
 
   const handleModalClose = () => setShowCreateModal(false);
