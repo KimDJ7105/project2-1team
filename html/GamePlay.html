@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>실시간 오목 게임</title>
+<title>증강오목 - 실시간 게임</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap" rel="stylesheet">
@@ -12,191 +12,194 @@
     --wood-1:#f6dfae;
     --wood-2:#f2d29a;
     --wood-line:#3d2c1a;
+    --stone-black-a:#5a5a5a;
+    --stone-black-b:#1c1c1c;
+    --stone-white-b:#d8d0c0;
     --teal:#3ecfc0;
     --teal-dark:#22988c;
-    --yellow:#ffcd4a;
-    --yellow-dark:#e0a400;
     --text-main:#4a3823;
     --text-sub:#93805f;
     --card-border:#f0dfc0;
     --page-bg:#e9e2d3;
+    --danger:#e0654f;
   }
   *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;height:100%;}
+  html,body{margin:0;padding:0;}
   body{
     font-family:'Gowun Dodum', sans-serif;
     background:var(--page-bg);
     color:var(--text-main);
-    display:flex;
-    justify-content:center;
     min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
   }
   .phone{
-    width:100%;
-    max-width:430px;
-    min-height:100vh;
+    width:390px;
+    height:750px;
     background:#fff7e8;
+    border-radius:34px;
+    overflow:hidden;
+    box-shadow:0 24px 48px -18px #0000004a;
     display:flex;
     flex-direction:column;
-    box-shadow:0 0 40px #0000001a;
   }
-  .pad{padding:22px 20px;}
-  .row{display:flex; align-items:center; gap:10px;}
+  .pad{padding:16px 16px 0; display:flex; flex-direction:column; flex:1; min-height:0;}
+  .row{display:flex; align-items:center; gap:8px;}
   .between{justify-content:space-between;}
 
+  .muted{color:var(--text-sub);}
   .avatar{
-    width:44px;height:44px;border-radius:50%;
+    width:34px;height:34px;border-radius:50%;
     background:linear-gradient(135deg,#ffd9a0,#ffb877);
     display:flex; align-items:center; justify-content:center;
-    font-size:22px; flex-shrink:0;
+    font-size:16px; flex-shrink:0;
   }
   .badge{
-    background:var(--yellow); color:var(--text-main);
-    font-size:12px; font-weight:700; padding:3px 9px;
-    border-radius:10px; display:inline-block; margin-top:3px;
+    background:var(--teal); color:#0e3833;
+    font-size:10px; font-weight:700; padding:2px 8px; border-radius:8px;
+  }
+  .timer{font-size:12px; font-weight:700; color:var(--text-sub);}
+
+  .gauge-wrap{margin:10px 0 2px;}
+  .gauge-label{
+    display:flex; justify-content:space-between; align-items:center;
+    font-size:11px; color:var(--text-sub); margin-bottom:5px;
+  }
+  .gauge-label b{color:var(--teal-dark); font-weight:700;}
+  .gauge-track{
+    height:9px; border-radius:6px; background:#f0e6cf; overflow:hidden;
+  }
+  .gauge-fill{
+    height:100%; border-radius:6px;
+    background:linear-gradient(90deg, var(--teal), #7fe8d8);
+    transition:width .3s ease;
   }
 
-  .title-sm{font-family:'Jua', sans-serif;}
-  .muted{color:var(--text-sub);}
+  .board{
+    position:relative; margin:12px auto;
+    border-radius:14px; overflow:hidden;
+    background:linear-gradient(150deg,var(--wood-1),var(--wood-2));
+    border:7px solid #d9ad6e;
+    width:350px; height:350px;
+  }
+  .grid-lines{
+    position:absolute; inset:0;
+    background-image:
+      linear-gradient(var(--wood-line) 1.5px, transparent 1.5px),
+      linear-gradient(90deg, var(--wood-line) 1.5px, transparent 1.5px);
+    background-size:25px 25px;
+    background-position:0 0;
+    opacity:.55;
+  }
+  .star-point{
+    position:absolute; width:6px; height:6px; border-radius:50%;
+    background:var(--wood-line); opacity:.55;
+    transform:translate(-50%,-50%);
+  }
+  .stone{position:absolute; width:20px;height:20px; border-radius:50%; transform:translate(-50%,-50%);}
+  .stone.b{background:radial-gradient(circle at 32% 26%, var(--stone-black-a), var(--stone-black-b) 72%); box-shadow:0 2px 4px #0006;}
+  .stone.w{background:radial-gradient(circle at 32% 26%, #fff, var(--stone-white-b) 78%); box-shadow:0 2px 4px #0003;}
+  .stone.aug::after{content:"";position:absolute;inset:-5px;border-radius:50%;border:2px solid var(--teal);}
 
+  .inv-section{margin-top:6px;}
+  .inv-label{font-size:11px; font-weight:700; color:var(--text-sub); margin-bottom:6px;}
+  .inv-row{display:flex; gap:8px;}
+  .inv-slot{
+    flex:1; height:52px; border-radius:12px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:20px;
+    background:#fffefb; border:1.5px dashed var(--card-border);
+    color:#c7b391;
+  }
+  .inv-slot.filled{
+    border-style:solid; border-color:var(--card-border); cursor:pointer;
+  }
+  .inv-slot.my.filled:active{transform:scale(.94); border-color:var(--teal);}
+  .inv-slot.opp.filled{color:var(--text-sub); font-size:13px; font-weight:700; cursor:default;}
+
+  .action-row{
+    margin-top:auto; display:flex; gap:8px; padding-bottom:18px;
+  }
   .btn{
-    border:none; border-radius:14px; font-family:'Jua', sans-serif;
-    font-size:16px; padding:14px; cursor:pointer; text-align:center;
-    color:#0e3833; background:var(--teal);
-    box-shadow:0 5px 0 var(--teal-dark);
-    width:100%;
-    transition:transform .08s, box-shadow .08s;
+    flex:1; border:none; border-radius:14px; font-family:'Jua', sans-serif;
+    font-size:14px; padding:12px; cursor:pointer; text-align:center;
   }
-  .btn:active{transform:translateY(4px); box-shadow:0 1px 0 var(--teal-dark);}
-
-  .section-label{
-    font-size:13px; font-weight:700; color:var(--text-sub);
-    margin:24px 0 10px;
-  }
-
-  .room-list{display:flex; flex-direction:column; gap:10px;}
-  .room-item{
-    background:#fffefb; border:1.5px solid var(--card-border);
-    border-radius:14px; padding:14px 16px;
-    display:flex; align-items:center; justify-content:space-between;
-    cursor:pointer;
-  }
-  .room-item .name{font-weight:700; display:flex; align-items:center; gap:8px;}
-  .room-item .count{color:var(--text-sub); font-size:13px;}
-  .room-item.full{opacity:.6;}
-
-  .bottom-nav{
-    margin-top:auto; display:flex; justify-content:space-around;
-    padding:14px 6px; border-top:1.5px solid var(--card-border); background:#fffefb;
-    font-size:11px; color:var(--text-sub);
-  }
-  .bottom-nav .item{display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer;}
-  .bottom-nav .item.active{color:var(--teal-dark); font-weight:700;}
+  .btn.danger{background:#f6c9c1; color:#7a2a1c; box-shadow:0 4px 0 #d98d7d;}
+  .btn.teal{background:var(--teal); color:#0e3833; box-shadow:0 4px 0 var(--teal-dark);}
+  .btn:active{transform:translateY(2px);}
 </style>
-
 </head>
-
 <body>
 
 <div class="phone">
+  <div class="pad">
 
-    <div class="pad" style="display:flex; flex-direction:column; height:100%;">
-
-        <!-- 상단 플레이어 정보 -->
-        <div class="row between">
-
-            <div class="row">
-                <div class="avatar">🦁</div>
-                <div>
-                    <div style="font-weight:700;">사자 (흑)</div>
-                    <span class="badge">내 차례</span>
-                </div>
-            </div>
-
-            <div style="font-size:18px; font-weight:700;">
-                ⏱ 00:45
-            </div>
-
-            <div class="row">
-                <div style="text-align:right;">
-                    <div style="font-weight:700;">구름 (백)</div>
-                    <div class="muted" style="font-size:12px;">대기중</div>
-                </div>
-                <div class="avatar">☁️</div>
-            </div>
-
+    <div class="row between">
+      <div class="row">
+        <div class="avatar">🦁</div>
+        <div>
+          <b style="font-size:13px;">사자 (흑)</b>
+          <div class="badge">내 차례</div>
         </div>
-
-        <!-- 오목판 -->
-        <div style="
-            margin-top:25px;
-            height:330px;
-            border-radius:18px;
-            background:linear-gradient(150deg,var(--wood-1),var(--wood-2));
-            border:6px solid #d9ad6e;
-            position:relative;
-            overflow:hidden;">
-
-            <!-- 격자 -->
-            <div style="
-                position:absolute;
-                inset:10px;
-                background-image:
-                linear-gradient(var(--wood-line) 1.5px,transparent 1.5px),
-                linear-gradient(90deg,var(--wood-line) 1.5px,transparent 1.5px);
-                background-size:22px 22px;
-                opacity:.5;">
-            </div>
-
-            <!-- 돌 -->
-            <div style="position:absolute;left:120px;top:100px;width:18px;height:18px;border-radius:50%;background:#222;"></div>
-
-            <div style="position:absolute;left:145px;top:123px;width:18px;height:18px;border-radius:50%;background:white;border:1px solid #bbb;"></div>
-
-            <div style="position:absolute;left:170px;top:145px;width:18px;height:18px;border-radius:50%;background:#222;"></div>
-
-            <div style="position:absolute;left:195px;top:168px;width:18px;height:18px;border-radius:50%;background:white;border:2px solid var(--teal);"></div>
-
-            <div style="position:absolute;left:220px;top:191px;width:18px;height:18px;border-radius:50%;background:#222;"></div>
-
+      </div>
+      <span class="timer">⏱ 00:45</span>
+      <div class="row">
+        <div style="text-align:right;">
+          <b style="font-size:13px;">구름 (백)</b>
+          <div class="muted" style="font-size:10px;">대기중</div>
         </div>
-
-        <!-- 증강 -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px;">
-
-            <div class="room-item">
-                <span>🃏 내 증강</span>
-                <span class="badge">추가 착수</span>
-            </div>
-
-            <div class="room-item">
-                <span>🃏 상대 증강</span>
-                <span class="muted">???</span>
-            </div>
-
-        </div>
-
-        <div style="flex:1;"></div>
-
-        <!-- 하단 버튼 -->
-        <div class="row" style="gap:12px;">
-
-            <button class="btn"
-                style="
-                background:#f6c9c1;
-                color:#7a2a1c;
-                box-shadow:0 5px 0 #d98d7d;">
-                항복
-            </button>
-
-            <button class="btn">
-                증강 사용 
-            </button>
-
-        </div>
-
+        <div class="avatar">☁️</div>
+      </div>
     </div>
 
+    <div class="gauge-wrap">
+      <div class="gauge-label">
+        <span>📍 다음 증강 선택까지</span>
+        <span><b>9</b> / 15턴</span>
+      </div>
+      <div class="gauge-track">
+        <div class="gauge-fill" style="width:60%;"></div>
+      </div>
+    </div>
+
+    <div class="board">
+      <div class="grid-lines"></div>
+      <div class="star-point" style="top:175px; left:175px;"></div>
+      <div class="stone b" style="top:150px; left:125px;"></div>
+      <div class="stone w" style="top:150px; left:150px;"></div>
+      <div class="stone b" style="top:175px; left:150px;"></div>
+      <div class="stone w aug" style="top:175px; left:200px;"></div>
+      <div class="stone b" style="top:200px; left:175px;"></div>
+      <div class="stone w" style="top:200px; left:225px;"></div>
+      <div class="stone b" style="top:225px; left:200px;"></div>
+    </div>
+
+    <div class="inv-section">
+      <p class="inv-label">🃏 내 증강 (내 턴에 클릭해서 사용)</p>
+      <div class="inv-row">
+        <div class="inv-slot my filled">➕</div>
+        <div class="inv-slot my filled">🌫️</div>
+        <div class="inv-slot my">＋</div>
+      </div>
+    </div>
+
+    <div class="inv-section" style="margin-top:12px;">
+      <p class="inv-label">🃏 상대 증강 (내용은 비공개)</p>
+      <div class="inv-row">
+        <div class="inv-slot opp filled">?</div>
+        <div class="inv-slot opp">＋</div>
+        <div class="inv-slot opp">＋</div>
+      </div>
+    </div>
+
+    <div class="action-row">
+      <button class="btn danger">항복</button>
+    </div>
+
+  </div>
 </div>
 
 </body>
+</html>
