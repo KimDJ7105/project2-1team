@@ -1,3 +1,4 @@
+//client/src/components/AuthForm.tsx
 import React, { useState } from 'react';
 import { loginAPI, registerAPI } from '../api/auth';
 
