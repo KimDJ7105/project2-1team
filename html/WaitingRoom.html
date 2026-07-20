@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>증강오목 - 메인 로비</title>
+<title>방 대기 화면</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap" rel="stylesheet">
@@ -93,46 +93,62 @@
   .bottom-nav .item{display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer;}
   .bottom-nav .item.active{color:var(--teal-dark); font-weight:700;}
 </style>
-
 </head>
+
 <body>
-<div class="phone">
-  <div class="pad" style="display:flex; flex-direction:column; gap:6px; flex:1;">
 
-    <div class="row between">
+<div class="slot">
+  <p class="slot-label">방 대기 화면</p>
+
+  <div class="phone">
+    <div class="pad" style="display:flex; flex-direction:column; gap:12px; height:100%;">
+
+      <!-- 상단 -->
       <div class="row">
-        <div class="avatar">🦁</div>
-        <div>
-          <div style="font-weight:700; font-size:15px;">사자님</div>
-          <span class="badge">🏆 1,210</span>
-        </div>
+        <span>←</span>
+        <span style="font-weight:700;">방 이름 : 사자의 방</span>
       </div>
-      <span style="font-size:20px;">🔔</span>
+
+      <!-- 플레이어 -->
+      <div class="row" style="justify-content:center; gap:24px; margin-top:10px;">
+
+        <!-- 방장 -->
+        <div style="text-align:center;">
+          <div class="avatar lg" style="margin:0 auto 6px;">🦁</div>
+          <div style="font-weight:700;">사자</div>
+        </div>
+
+        <!-- 참가자 -->
+        <div style="text-align:center;">
+          <div class="avatar lg empty"
+               style="margin:0 auto 6px; display:flex; align-items:center; justify-content:center;">
+            ❔
+          </div>
+          <div class="muted">대기중...</div>
+        </div>
+
+      </div>
+
+      <!-- 인원 -->
+      <p style="text-align:center; font-weight:700;">
+        인원 1 / 2
+      </p>
+
+      <!-- 상태 -->
+      <div class="list-item" style="justify-content:center; margin-top:10px;">
+        🍂 상대방을 기다리고 있어요
+      </div>
+
+      <div style="flex:1;"></div>
+
+      <!-- 시작 버튼 -->
+      <button class="btn teal">
+        준비 완료 (2/2가 되면 시작) →
+      </button>
+
     </div>
-
-    <div style="text-align:center; margin:22px 0 8px;">
-      <p class="title-sm" style="font-size:40px; margin:0;">증강오목</p>
-      <p class="muted" style="font-size:11px; letter-spacing:.08em; margin:2px 0 0;">AUGMENTED OMOK</p>
-    </div>
-
-    <button class="btn" onclick="sendPrompt && sendPrompt('방 만들기')">＋ 방 만들기</button>
-
-    <p class="section-label">게임방 목록</p>
-    <div class="room-list">
-      <div class="room-item"><span class="name">➕ 사자의 방</span><span class="count">1 / 2</span></div>
-      <div class="room-item"><span class="name">🌱 초보 환영</span><span class="count">1 / 2</span></div>
-      <div class="room-item full"><span class="name">🔒 오목 한판</span><span class="count">2 / 2</span></div>
-      <div class="room-item"><span class="name">👑 고수 대기방</span><span class="count">1 / 2</span></div>
-    </div>
-
-  </div>
-
-  <div class="bottom-nav">
-    <div class="item active">🏠<span>홈</span></div>
-    <div class="item">📊<span>전적</span></div>
-    <div class="item">📖<span>증강도감</span></div>
-    <div class="item">👤<span>프로필</span></div>
   </div>
 </div>
+
 </body>
 </html>

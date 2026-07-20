@@ -321,6 +321,6 @@ credentials
 
 # 4. 도커 (Docker) 관련 임시 파일
 # 개발 환경에 따라 도커 빌드 시 생성되는 불필요한 캐시 파일
-.dockerignore
+
 /client/node_modules/
 /server/node_modules/

@@ -84,6 +84,16 @@ export class RedisSessionManager implements ISessionManager {
     }
     await this.redisClient.expire(`session:${sessionId}`, ttlSeconds);
   }
+
+  // 방 목록 조회용 (Redis Hash 전체 가져오기)
+  async getAllRooms(): Promise<string[]> {
+    return await this.redisClient.hvals('game_rooms');
+  }
+
+  // 방 생성/저장용
+  async saveRoom(roomId: string, roomData: Record<string, any>): Promise<void> {
+    await this.redisClient.hset('game_rooms', roomId, JSON.stringify(roomData));
+  }
 }
 
 //싱글톤
