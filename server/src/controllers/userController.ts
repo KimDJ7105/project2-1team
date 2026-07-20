@@ -2,6 +2,7 @@
 import { Request, Response } from 'express';
 import { userService } from '../services/userService';
 import { redisSessionManager } from '../sessions/redisSessionManager';
+import { disconnectTimerManager } from '../sessions/disconnectTimerManager';
 
 export class UserController {
   // 1. 회원가입 요청 처리
@@ -34,23 +35,28 @@ export class UserController {
     try {
       const { email, password } = req.body;
 
-      // 중복 로그인 검사 
-      const existingSessionId = await redisSessionManager.getActiveSessionByEmail(email);
-      if (existingSessionId) {
-        res.status(409).json({
-          message: '이미 접속 중인 아이디입니다. 기존 접속을 해제하거나 잠시 후 다시 시도해주세요.'
-        });
-        return;
-      }
-
       // 필수값 검증
       if (!email || !password) {
         res.status(400).json({ message: '이메일과 비밀번호를 입력해 주세요.' });
         return;
       }
 
-      // 서비스 레이어 호출
+      // 비밀번호 검증 
       const user = await userService.login(email, password);
+
+      // 3) 기존 세션 존재 여부 확인 및 강제 밀어내기 처리
+      const existingSessionId = await redisSessionManager.getActiveSessionByEmail(email);
+      if (existingSessionId) {
+        console.log(`[중복 로그인 감지] 기존 세션을 강제 종료하고 새 로그인을 진행합니다: ${email}`);
+        
+        // 소켓 종료 대기 타이머가 돌고 있다면 즉시 취소
+        if (disconnectTimerManager.has(email)) {
+          disconnectTimerManager.clear(email);
+        }
+
+        // Redis에 남아있는 기존 유령/활성 세션 파기
+        await redisSessionManager.destroySession(existingSessionId);
+      }
 
       // 세션 유지 시간 설정 : 1시간
       const ttlSeconds = 3600;

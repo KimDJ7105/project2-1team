@@ -5,6 +5,9 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import userRoutes from './routes/userRoutes'; // 라우터 가져오기
 import { socketAuthMiddleware, AuthenticatedSocket } from './sessions/socketAuth';
+import { disconnectTimerManager } from './sessions/disconnectTimerManager';
+import { redisSessionManager } from './sessions/redisSessionManager';
+
 
 const app = express();
 
@@ -33,6 +36,9 @@ const io = new Server(httpServer, {
 // Socket.io 전용 인증 미들웨어 장착
 io.use(socketAuthMiddleware);
 
+// 연결 해제 타이머 관리 Map
+export const disconnectTimers = new Map<string, NodeJS.Timeout>();
+
 // 3. 실시간 소켓 통신 이벤트 리스너 정의 (인증을 통과한 소켓만 들어옴)
 io.on('connection', (socket: AuthenticatedSocket) => {
   // 인증 미들웨어에서 바인딩한 유저 정보 추출
@@ -40,6 +46,13 @@ io.on('connection', (socket: AuthenticatedSocket) => {
   const userNickname = socket.user?.nickname;
 
   console.log(`[Server] 유저 ${userNickname}(${userEmail}) 님이 무전기 채널에 접속했습니다! (소켓 ID: ${socket.id})`);
+  
+  // 새로고침 등으로 5초 이내에 재연결된 경우: 예약된 세션 삭제 타이머 취소
+  if (userEmail && disconnectTimers.has(userEmail)) {
+    clearTimeout(disconnectTimers.get(userEmail));
+    disconnectTimers.delete(userEmail);
+    console.log(`[세션 유지] ${userNickname}(${userEmail}) 님 새로고침 재연결 감지! (삭제 예약 취소됨)`);
+  }
 
   // 클라이언트가 'test_click'이라는 신호를 무전으로 보냈을 때 반응하는 곳
   socket.on('test_click', (data) => {
@@ -54,6 +67,23 @@ io.on('connection', (socket: AuthenticatedSocket) => {
   // 접속이 끊겼을 때
   socket.on('disconnect', () => {
     console.log(`[Server] 유저 ${userNickname} 님의 접속이 끊겼습니다. (소켓 ID: ${socket.id})`);
+
+    if (!userEmail) return;
+
+    // 연결 해제 시 5초 뒤에 Redis 세션을 삭제하는 타이머 시작
+    const timer = setTimeout(async () => {
+      try {
+        // 현재 이메일로 등록된 세션 키 삭제 (중복 로그인 차단에 사용하신 키 경로 적용)
+        await redisSessionManager.destroySession(`user_session:${userEmail}`);
+        console.log(`[세션 정리 완료] 탭 종료 확정 (5초 경과): ${userNickname}(${userEmail}) 세션 삭제됨`);
+      } catch (error) {
+        console.error(`[세션 정리 오류] Redis 세션 삭제 실패 (${userEmail}):`, error);
+      } finally {
+        disconnectTimers.delete(userEmail);
+      }
+    }, 5000); // 5초 (5000ms) 대기
+
+    disconnectTimers.set(userEmail, timer);
   });
 });
 

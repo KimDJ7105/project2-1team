@@ -12,6 +12,14 @@ const API = axios.create({
   withCredentials: true, // CORS 상황에서 쿠키나 세션 인증 정보를 주고받기 위한 설정
 });
 
+API.interceptors.request.use((config) => {
+  const token = sessionStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 // 회원가입 요청 시 보낼 데이터 타입 정의
 export interface RegisterRequest {
   email: string;
@@ -54,6 +62,12 @@ export const registerAPI = async (data: RegisterRequest): Promise<AuthResponse> 
 export const loginAPI = async (data: LoginRequest): Promise<AuthResponse> => {
   const response = await API.post<AuthResponse>('/login', data);
   return response.data;
+};
+
+// 3. 로그아웃 API 호출 함수
+export const logoutAPI = async () => {
+  const token = sessionStorage.getItem('token');
+  return await API.post('/logout', { token });
 };
 
 // 4. 세션 검증 API 호출 

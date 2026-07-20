@@ -25,7 +25,7 @@ export default function LoginForm({ onSwitch, onAuthSuccess }: LoginFormProps) {
       const data = await loginAPI({ email, password });
 
       if (data.token) {
-        localStorage.setItem('accessToken', data.token);
+        sessionStorage.setItem('token', data.token);
       }
       
       setMessage('로그인에 성공했습니다! 잠시 후 이동합니다.');

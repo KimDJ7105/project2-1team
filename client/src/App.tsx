@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { io, Socket } from 'socket.io-client';
 import AuthPage from './pages/AuthPage';
-import { getMeAPI } from './api/auth';
+import { getMeAPI, logoutAPI } from './api/auth';
 
 export default function App() {
   const [user, setUser] = useState<any>(null);
@@ -14,7 +14,7 @@ export default function App() {
 
   useEffect(() => {
     const restoreSession = async () => {
-      const savedToken = localStorage.getItem('accessToken');
+      const savedToken = sessionStorage.getItem('token');
       
       if (!savedToken || savedToken === 'undefined') {
         setIsLoading(false);
@@ -34,7 +34,7 @@ export default function App() {
       } catch (error) {
         console.error('세션 복구 실패(만료되었거나 잘못된 토큰):', error);
         // 토큰이 만료되었거나 비정상적이면 보관함 비우기
-        localStorage.removeItem('accessToken');
+        sessionStorage.removeItem('token');
       } finally {
         setIsLoading(false);
       }
@@ -46,7 +46,7 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
     
-    const currentToken = user.token || localStorage.getItem('accessToken');
+    const currentToken = user.token || sessionStorage.getItem('token');
 
     if (!currentToken || currentToken === 'undefined') {
       console.log(`[소켓 에러]: 유효한 토큰을 찾을 수 없습니다. 다시 시도해 주세요.`);
@@ -95,14 +95,19 @@ export default function App() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await logoutAPI();
+    } catch (err) {
+      console.error('로그아웃 서버 통신 실패', err);
+    }
+
     setUser(null);
     if (socket) {
       socket.disconnect();
     }
     setSocket(null);
-    setLog('소켓 연결을 대기 중입니다...');
-    localStorage.removeItem('accessToken');
+    sessionStorage.removeItem('token');
   };
 
   if (isLoading) {
