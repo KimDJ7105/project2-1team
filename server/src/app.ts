@@ -102,12 +102,40 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     }
   });
 
-  socket.on('room:create', async (data: { roomTitle: string }) => {
-    // data 뒤에 타입을 명시하여 'any' 에러 해결
-    console.log(`방 생성 요청: ${data.roomTitle}`);
-    // ... 방 생성 로직 ...
-  });
+  socket.on('room:create', async (data: any) => {
+    try {
+    const titleValue = data.roomTitle || data.title;
 
+    // 알파벳과 숫자로 구성된 5자리 무작위 문자열 생성
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let randomId = '';
+    for (let i = 0; i < 5; i++) {
+      randomId += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+
+    // 방 제목과 난수를 조합하여 고유한 방 ID 생성
+    const roomId = `${titleValue}_${randomId}`;
+
+    // 클라이언트의 Room 인터페이스와 일치하는 객체 생성
+    const newRoom = {
+      roomId: roomId,
+      roomTitle: titleValue,
+      playerCount: 1, // 방 생성자가 최초 1인으로 참가하므로 1로 설정
+      status: 'waiting'
+    };
+
+    // Redis에 방 데이터 저장
+    await redisSessionManager.saveRoom(roomId, newRoom);
+
+    // 전체 방 목록을 다시 조회하여 접속 중인 모든 클라이언트에게 갱신된 목록 전송
+    const roomsData = await redisSessionManager.getAllRooms();
+    const roomList = roomsData.map((roomStr: string) => JSON.parse(roomStr));
+
+    io.emit('room:list', roomList);
+    } catch (err) {
+      console.error('방 생성 에러:', err);
+    }
+  });
 });
 
 // 테스트용
