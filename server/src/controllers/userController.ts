@@ -86,6 +86,34 @@ export class UserController {
       res.status(500).json({ message: '로그아웃 처리 중 서버 오류가 발생했습니다.' });
     }
   }
+
+  async getMe(req: Request, res: Response): Promise<void> {
+    try {
+      const authHeader = req.headers.authorization;
+      const token = authHeader ? authHeader.split(' ')[1] : null;
+
+      if (!token) {
+        res.status(401).json({ message: '인증 토큰이 없습니다.' });
+        return;
+      }
+
+      // Redis에서 세션 정보 조회
+      const sessionData = await redisSessionManager.getSession(token);
+
+      if (!sessionData) {
+        res.status(401).json({ message: '유효하지 않거나 만료된 세션입니다.' });
+        return;
+      }
+
+      // 세션에 저장되어 있던 유저 정보 반환
+      res.status(200).json({
+        user: sessionData.user,
+      });
+    } catch (error: any) {
+      console.error('[GetMe Error]:', error);
+      res.status(500).json({ message: '내 정보 조회 중 오류가 발생했습니다.' });
+    }
+  }
 }
 
 // 싱글톤 컨트롤러 인스턴스 제공
