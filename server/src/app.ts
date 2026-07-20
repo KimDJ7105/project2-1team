@@ -7,6 +7,7 @@ import userRoutes from './routes/userRoutes'; // 라우터 가져오기
 import { socketAuthMiddleware, AuthenticatedSocket } from './sessions/socketAuth';
 import { disconnectTimerManager } from './sessions/disconnectTimerManager';
 import { redisSessionManager } from './sessions/redisSessionManager';
+import { SCRoomSummary } from './shared/types/game_data';
 
 
 const app = express();
@@ -36,9 +37,6 @@ const io = new Server(httpServer, {
 // Socket.io 전용 인증 미들웨어 장착
 io.use(socketAuthMiddleware);
 
-// 연결 해제 타이머 관리 Map
-export const disconnectTimers = new Map<string, NodeJS.Timeout>();
-
 // 3. 실시간 소켓 통신 이벤트 리스너 정의 (인증을 통과한 소켓만 들어옴)
 io.on('connection', (socket: AuthenticatedSocket) => {
   // 인증 미들웨어에서 바인딩한 유저 정보 추출
@@ -47,11 +45,10 @@ io.on('connection', (socket: AuthenticatedSocket) => {
 
   console.log(`[Server] 유저 ${userNickname}(${userEmail}) 님이 무전기 채널에 접속했습니다! (소켓 ID: ${socket.id})`);
   
-  // 새로고침 등으로 5초 이내에 재연결된 경우: 예약된 세션 삭제 타이머 취소
-  if (userEmail && disconnectTimers.has(userEmail)) {
-    clearTimeout(disconnectTimers.get(userEmail));
-    disconnectTimers.delete(userEmail);
-    console.log(`[세션 유지] ${userNickname}(${userEmail}) 님 새로고침 재연결 감지! (삭제 예약 취소됨)`);
+  // 새로고침 등으로 5초 이내에 재연결된 경우 타이머 취소
+  if (userEmail && disconnectTimerManager.has(userEmail)) {
+    disconnectTimerManager.clear(userEmail);
+    console.log(`[세션 유지] ${userNickname}(${userEmail}) 님 재연결 감지 (삭제 예약 취소)`);
   }
 
   // 클라이언트가 'test_click'이라는 신호를 무전으로 보냈을 때 반응하는 곳
@@ -70,22 +67,58 @@ io.on('connection', (socket: AuthenticatedSocket) => {
 
     if (!userEmail) return;
 
-    // 연결 해제 시 5초 뒤에 Redis 세션을 삭제하는 타이머 시작
+    // 5초 대기 후 redisSessionManager를 통해 세션 및 인덱스 키 정상 파기
     const timer = setTimeout(async () => {
       try {
-        // 현재 이메일로 등록된 세션 키 삭제 (중복 로그인 차단에 사용하신 키 경로 적용)
-        await redisSessionManager.destroySession(`user_session:${userEmail}`);
-        console.log(`[세션 정리 완료] 탭 종료 확정 (5초 경과): ${userNickname}(${userEmail}) 세션 삭제됨`);
+        const sessionId = await redisSessionManager.getActiveSessionByEmail(userEmail);
+        if (sessionId) {
+          await redisSessionManager.destroySession(sessionId);
+          console.log(`[세션 정리 완료] 탭 종료 5초 경과로 세션 파기: ${userEmail}`);
+        }
       } catch (error) {
-        console.error(`[세션 정리 오류] Redis 세션 삭제 실패 (${userEmail}):`, error);
+        console.error(`[세션 정리 오류]:`, error);
       } finally {
-        disconnectTimers.delete(userEmail);
+        disconnectTimerManager.clear(userEmail);
       }
-    }, 5000); // 5초 (5000ms) 대기
+    }, 5000);
 
-    disconnectTimers.set(userEmail, timer);
+    disconnectTimerManager.set(userEmail, timer);
   });
+
+  // 방 목록 조회 요청 처리
+  socket.on('room:list', async () => {
+    try {
+      // 1. Redis에서 'game_rooms' 해시의 모든 값을 가져옴
+      // hvals는 방 ID를 키로 가진 모든 JSON 데이터(방 정보)를 배열로 반환합니다.
+      const roomsData = await redisSessionManager.getAllRooms();
+    
+      // 2. 문자열 데이터를 객체(SCRoomSummary)로 변환
+      const roomList: SCRoomSummary[] = roomsData.map((data: string) => JSON.parse(data) as SCRoomSummary);
+    
+      // 3. 클라이언트에 전송
+      socket.emit('room:list', roomList);
+    } catch (err) {
+      console.error('방 목록 조회 실패:', err);
+    }
+  });
+
+  socket.on('room:create', async (data: { roomTitle: string }) => {
+    // data 뒤에 타입을 명시하여 'any' 에러 해결
+    console.log(`방 생성 요청: ${data.roomTitle}`);
+    // ... 방 생성 로직 ...
+  });
+
 });
+
+// 테스트용
+async function seedData() {
+  await redisSessionManager.saveRoom('room_1', {
+    roomId: 'room_1',
+    roomTitle: '테스트 방 1',
+    playerCount: 1,
+    status: 'waiting'
+  });
+}
 
 // 데이터베이스 초기화 및 서버 구동을 위한 비동기 래퍼 함수
 async function startServer() {
@@ -100,6 +133,8 @@ async function startServer() {
       console.log(`[Server] 오목 백엔드 서버 가동 중! (포트: ${PORT})`);
       console.log(`=========================================`);
     });
+
+    seedData();
   } catch (error) {
     console.error('[Server] 서버 구동 중 치명적인 오류가 발생했습니다:', error);
     process.exit(1); // 초기화 실패 시 프로세스 종료

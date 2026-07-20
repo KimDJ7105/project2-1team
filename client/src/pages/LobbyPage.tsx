@@ -1,0 +1,82 @@
+// client/src/pages/LobbyPage.tsx
+import React, { useState, useCallback, useEffect } from 'react';
+import '../assets/styles/LobbyStyles.css';
+import { RoomList } from '../components/Game/RoomList';
+import { BottomNav } from '../components/Game/BottomNav';
+import type { Socket } from 'socket.io-client';
+import type { Room } from '../hooks/useSocket';
+
+interface LobbyPageProps {
+  socket: Socket | null;
+  user: { nickname: string; email: string };
+  onLogout: () => void;
+}
+
+export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout }) => {
+  const [rooms, setRooms] = useState<Room[]>([]);
+
+  const requestRoomList = useCallback(() => {
+    if (socket?.connected) socket.emit('room:list');
+  }, [socket]);
+
+  useEffect(() => {
+    if (!socket) return;
+    socket.on('room:list', (list: Room[]) => setRooms(list));
+    requestRoomList();
+    return () => { socket.off('room:list'); };
+  }, [socket, requestRoomList]);
+
+  const handleCreateRoom = () => {
+    const title = prompt('생성할 방 제목을 입력하세요:', `${user.nickname}의 방`);
+    if (title && socket) socket.emit('room:create', { title });
+  };
+
+  const handleJoinRoom = (roomId: string) => {
+    if (socket) socket.emit('room:join', { roomId });
+  };
+
+  return (
+    <div className="phone">
+      <div className="pad flex-col flex-1" style={{ gap: '10px' }}>
+        <div className="row between">
+          <div className="row" style={{ gap: '12px' }}>
+            <div className="avatar" style={{ fontSize: '28px' }}>🦁</div>
+            <div className="flex-col" style={{ gap: '2px' }}>
+              <div style={{ fontWeight: 800, fontSize: '18px', color: 'var(--text-main)' }}>
+                {user.nickname}님
+              </div>
+              {/* TODO: 승리 횟수 등 동적 데이터 연동 필요 */}
+              <span className="badge" style={{ fontSize: '13px', padding: '4px 10px' }}>🏆 0</span>
+            </div>
+          </div>
+          <div className="row" style={{ gap: '16px' }}>
+            <span onClick={onLogout} style={{ fontSize: '18px', color: 'var(--text-sub)', cursor: 'pointer', textDecoration: 'underline', fontWeight: 600 }}>
+              로그아웃
+            </span>
+          </div>
+        </div>
+
+        <div style={{ textAlign: 'center', margin: '30px 0 15px' }}>
+          <p className="title-sm" style={{ fontSize: '48px', margin: 0, fontWeight: 700 }}>증강오목</p>
+          <p className="muted" style={{ fontSize: '13px', letterSpacing: '.1em', margin: '4px 0 0', fontWeight: 600 }}>AUGMENTED OMOK</p>
+        </div>
+
+        <button className="btn" style={{ fontSize: '18px', fontWeight: 700, padding: '16px' }} onClick={handleCreateRoom}>
+          ＋ 방 만들기
+        </button>
+
+        <div className="row between" style={{ margin: '28px 0 12px' }}>
+          <p className="section-label" style={{ margin: 0, fontSize: '18px', fontWeight: 900, color: '#333' }}>
+            게임방 목록
+          </p>
+          <span onClick={requestRoomList} style={{ fontSize: '16px', cursor: 'pointer', color: 'var(--teal-dark)', fontWeight: 900 }}>
+            🔄 새로고침
+          </span>
+        </div>
+
+        <RoomList rooms={rooms} onJoinRoom={handleJoinRoom} />
+      </div>
+      <BottomNav />
+    </div>
+  );
+};
