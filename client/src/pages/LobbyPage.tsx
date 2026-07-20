@@ -3,6 +3,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import '../assets/styles/LobbyStyles.css';
 import { RoomList } from '../components/Game/RoomList';
 import { BottomNav } from '../components/Game/BottomNav';
+import CreateRoomModal from '../components/Game/CreateRoomModal.tsx';
 import type { Socket } from 'socket.io-client';
 import type { Room } from '../hooks/useSocket';
 
@@ -14,6 +15,7 @@ interface LobbyPageProps {
 
 export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout }) => {
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   const requestRoomList = useCallback(() => {
     if (socket?.connected) socket.emit('room:list');
@@ -27,9 +29,15 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout }) 
   }, [socket, requestRoomList]);
 
   const handleCreateRoom = () => {
-    const title = prompt('생성할 방 제목을 입력하세요:', `${user.nickname}의 방`);
-    if (title && socket) socket.emit('room:create', { title });
+    setShowCreateModal(true);
   };
+
+  const handleModalCreate = (title: string) => {
+    if (title && socket) socket.emit('room:create', { title });
+    setShowCreateModal(false);
+  };
+
+  const handleModalClose = () => setShowCreateModal(false);
 
   const handleJoinRoom = (roomId: string) => {
     if (socket) socket.emit('room:join', { roomId });
@@ -77,6 +85,12 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout }) 
         <RoomList rooms={rooms} onJoinRoom={handleJoinRoom} />
       </div>
       <BottomNav />
+      <CreateRoomModal
+        visible={showCreateModal}
+        defaultName={`${user.nickname}의 방`}
+        onClose={handleModalClose}
+        onCreate={handleModalCreate}
+      />
     </div>
   );
 };
