@@ -34,6 +34,15 @@ export class UserController {
     try {
       const { email, password } = req.body;
 
+      // 중복 로그인 검사 
+      const existingSessionId = await redisSessionManager.getActiveSessionByEmail(email);
+      if (existingSessionId) {
+        res.status(409).json({
+          message: '이미 접속 중인 아이디입니다. 기존 접속을 해제하거나 잠시 후 다시 시도해주세요.'
+        });
+        return;
+      }
+
       // 필수값 검증
       if (!email || !password) {
         res.status(400).json({ message: '이메일과 비밀번호를 입력해 주세요.' });

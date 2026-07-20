@@ -1,5 +1,8 @@
 // server/src/sessions/sessionManager.interface.ts
 export interface ISessionManager {
+  // email로 토큰 검색 
+  getActiveSessionByEmail(email: string): Promise<string | null>;
+
   // 세션 생성 (로그인 성공 시 세션 토큰 반환)
   createSession(userId: string, data: Record<string, any>, ttlSeconds: number): Promise<string>;
 
