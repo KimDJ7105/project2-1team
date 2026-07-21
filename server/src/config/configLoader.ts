@@ -5,7 +5,7 @@ import yaml from 'js-yaml';
 
 // 불러올 설정값들의 타입을 정의
 export interface DatabaseConfig {
-  type: 'memory' | 'mysql'; // 사용할 DB 종류 
+  type: 'memory' | 'mysql'; // 사용할 DB 종류
   host?: string;
   port?: number;
   username?: string;
@@ -13,7 +13,7 @@ export interface DatabaseConfig {
   database?: string;
 }
 
-export interface RedisConfig { // redis 정보 
+export interface RedisConfig { // redis 정보
   host: string;
   port: number;
   password?: string;
@@ -31,6 +31,28 @@ interface RawYamlConfig {
   production: AppConfig;
 }
 
+// YAML 파싱 결과에서 ${VAR:default} 패턴을 찾아 실제 환경변수 값으로 치환하는 함수
+// process.env에 해당 키가 없으면 콜론(:) 뒤의 기본값을 사용
+function resolveEnvVars(obj: unknown): unknown {
+  if (typeof obj === 'string') {
+    // 문자열이면 패턴 매칭 후 환경변수로 치환
+    return obj.replace(/\$\{(\w+):?(.*?)\}/g, (_, key, defaultVal) => {
+      return process.env[key] ?? defaultVal;
+    });
+  }
+  if (Array.isArray(obj)) {
+    // 배열이면 각 요소에 재귀 적용
+    return obj.map(resolveEnvVars);
+  }
+  if (typeof obj === 'object' && obj !== null) {
+    // 객체이면 각 값에 재귀 적용
+    return Object.fromEntries(
+      Object.entries(obj).map(([k, v]) => [k, resolveEnvVars(v)])
+    );
+  }
+  return obj;
+}
+
 // 1. NODE_ENV 환경 변수를 확인 (기본값은 development)
 const env = process.env.NODE_ENV || 'development';
 
@@ -40,8 +62,8 @@ const configPath = path.join(process.cwd(), 'src', 'config', 'application.yaml')
 // 3. 파일을 동기식으로 읽기
 const fileContents = fs.readFileSync(configPath, 'utf8');
 
-// 4. 문자열을 JavaScript 객체로 파싱
-const allConfigs = yaml.load(fileContents) as RawYamlConfig;
+// 4. 문자열을 JavaScript 객체로 파싱 후, resolveEnvVars로 환경변수 치환 적용
+const allConfigs = resolveEnvVars(yaml.load(fileContents)) as RawYamlConfig;
 
 // 5. development 혹은 production에 알맞은 설정 뽑아내기
 const activeConfig: AppConfig = allConfigs[env as keyof RawYamlConfig] || allConfigs.development;
@@ -51,4 +73,4 @@ console.log(`[Config] 현재 활성화된 환경 설정 프로필: ${env.toUpper
 console.log(`[Config] 데이터베이스 타입: ${activeConfig.database.type}`);
 console.log(`[Config] Redis 호스트 주소: ${activeConfig.redis.host}`); // 로그 추가
 
-export default activeConfig; 
+export default activeConfig;
