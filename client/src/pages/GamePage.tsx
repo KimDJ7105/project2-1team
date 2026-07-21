@@ -244,12 +244,15 @@ export const GamePage: React.FC<GamePageProps> = ({
           <div className="star-point" style={{ top: getStarPos(11), left: getStarPos(11) }}></div>
 
           {stones.map((stone, idx) => {
-            const pixelX = 14 + stone.x * 22;
-            const pixelY = 14 + stone.y * 22;
+            // border(7px)와 grid-lines의 오프셋(14px)을 더해 주어야 격자 교차점과 정확히 일치함
+            const pixelX = 2 + 14 + stone.x * 22;
+            const pixelY = 2 + 14 + stone.y * 22;
+            // 공백 방지 
+            const stoneClass = `stone ${stone.color === 'black' ? 'b' : 'w'}${stone.isAugmented ? ' aug' : ''}`;
             return (
               <div
                 key={idx}
-                className={`stone ${stone.color === 'black' ? 'b' : 'w'} ${stone.isAugmented ? 'aug' : ''}`}
+                className={stoneClass}
                 style={{ top: `${pixelY}px`, left: `${pixelX}px` }}
               ></div>
             );

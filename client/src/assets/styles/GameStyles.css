@@ -143,13 +143,18 @@
   transform: translate(-50%, -50%);
 }
 
+.board .stone {
+  opacity: 1 !important;
+  transition: none !important;
+}
+
 .stone {
   position: absolute;
   width: 20px;
   height: 20px;
   border-radius: 50%;
   transform: translate(-50%, -50%);
-  z-index: 10;
+  z-index: 20;
 }
 
 .stone.b {
