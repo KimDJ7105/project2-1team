@@ -1,77 +1,106 @@
 import React, { useState } from 'react';
-import '../../assets/styles/ProfileEdit.css';
+import '../../assets/styles/ProfileStyles.css';
 
-interface ProfileEditProps {
-  onSave: () => void;
-  onCancel: () => void;
+interface ProfileEditViewProps {
+  nickname: string;
+  onSave: (nickname: string) => void;
+  onBackClick: () => void;
 }
 
-export default function ProfileEdit({
+export default function ProfileEditView({
+  nickname,
   onSave,
-  onCancel,
-}: ProfileEditProps) {
-  const [nickname, setNickname] = useState('사자');
-  const [intro, setIntro] = useState('오늘도 오목 한 판 어때요?');
+  onBackClick,
+}: ProfileEditViewProps) {
+  const [editNickname, setEditNickname] = useState(nickname);
 
   return (
     <div className="phone">
+
       <div className="pad">
 
+        {/* 상단 제목 */}
         <div className="row">
-          <span style={{ cursor: 'pointer' }} onClick={onCancel}>
+          <span 
+            style={{ cursor: 'pointer' }}
+            onClick={onBackClick}
+          >
             ←
           </span>
-          <b>프로필 편집</b>
+
+          <b
+            style={{ cursor: 'pointer' }}
+            onClick={onBackClick}
+          >
+            프로필 편집
+          </b>
         </div>
 
-        <div className="profile-image-area">
-          <div className="avatar xl">
+
+        {/* 프로필 사진 영역 */}
+        <div
+          style={{
+            textAlign: 'center',
+            margin: '30px 0'
+          }}
+        >
+
+          <div
+            className="avatar lg"
+            style={{
+              margin: '0 auto 15px'
+            }}
+          >
             🦁
-            <div className="camera-btn">📷</div>
           </div>
 
-          <p className="muted">
-            사진을 눌러 변경
-          </p>
+
+          <button className="profile-btn ghost">
+            사진 변경
+          </button>
+
         </div>
 
-        <div className="input-group">
-          <label>닉네임</label>
+
+        {/* 닉네임 */}
+        <div className="list-item">
+
+          <span className="muted">
+            닉네임
+          </span>
+
           <input
             type="text"
-            value={nickname}
-            onChange={(e) => setNickname(e.target.value)}
+            value={editNickname}
+            onChange={(e) => setEditNickname(e.target.value)}
           />
+
         </div>
 
-        <div className="input-group">
-          <label>한 줄 소개</label>
-          <textarea
-            rows={3}
-            value={intro}
-            onChange={(e) => setIntro(e.target.value)}
-          />
-        </div>
 
-        <div style={{ flex: 1 }} />
+        <div style={{ flex: 1 }}></div>
 
-        <div className="button-row">
-          <button
-            className="profile-btn ghost"
-            onClick={onCancel}
-          >
-            취소
-          </button>
 
-          <button
-            className="profile-btn save"
-            onClick={onSave}
-          >
-            저장 →
-          </button>
-        </div>
+        {/* 버튼 */}
+        <button
+          className="profile-btn ghost"
+          onClick={onBackClick}
+        >
+          취소
+        </button>
+
+
+        <button
+          className="profile-btn"
+          onClick={() => onSave(editNickname)}
+        >
+          저장
+        </button>
+
 
       </div>
+
+
     </div>
   );
 }
