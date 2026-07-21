@@ -38,6 +38,13 @@ export const GamePage: React.FC<GamePageProps> = ({
   const [opponent, setOpponent] = useState<PlayerInfo | null>(null);
   const [stones, setStones] = useState<Stone[]>([]);
   const [myAugments, setMyAugments] = useState<string[]>(['＋', '🌫️']);
+  const [isOverlayHidden, setIsOverlayHidden] = useState<boolean>(false);
+  const [gameOverData, setGameOverData] = useState<{
+    isOver: boolean;
+    winnerColor?: 'black' | 'white';
+    winnerNickname?: string;
+    isMeWinner?: boolean;
+  } | null>(null);
 
   // 서버의 2차원 보드 데이터를 돌 객체 배열로 변환
   const parseBoardToStones = (board: any[][]): Stone[] => {
@@ -134,8 +141,18 @@ export const GamePage: React.FC<GamePageProps> = ({
     };
 
     const handleGameOver = (data: any) => {
-      alert(data.message);
-      onLeave();
+      console.log('[GamePage] 게임 종료 수신:', data);
+      // 서버가 보낸 승자 색상(data.winner)과 내 색상(myColor)을 비교해 승패 판별
+      const isWinner = data.winner === myColor;
+
+      setGameOverData({
+        isOver: true,
+        winnerColor: data.winner,
+        winnerNickname: data.winnerNickname || '알 수 없음',
+        isMeWinner: isWinner,
+      });
+
+      setIsOverlayHidden(false);
     };
 
     socket.on('game:start', handleInitialState);
@@ -279,6 +296,83 @@ export const GamePage: React.FC<GamePageProps> = ({
           </button>
         </div>
       </div>
+      {/* 보드판 보기를 눌렀을 때 화면 최상단에 뜨는 '결과 다시 보기' 플로팅 버튼 */}
+      {gameOverData?.isOver && isOverlayHidden && (
+        <button
+          onClick={() => setIsOverlayHidden(false)}
+          style={{
+            position: 'absolute', top: '16px', left: '50%', transform: 'translateX(-50%)',
+            zIndex: 90, background: 'var(--teal)', color: '#0e3833', border: 'none',
+            padding: '8px 16px', borderRadius: '20px', fontFamily: 'Jua, sans-serif',
+            boxShadow: '0 4px 10px rgba(0,0,0,0.15)', cursor: 'pointer'
+          }}
+        >
+          🏆 결과 다시 보기
+        </button>
+      )}
+      {/* 게임 종료 결과 오버레이 */}
+      {gameOverData?.isOver && !isOverlayHidden && (
+        <div className="result-overlay">
+          <span className="confetti" style={{ top: '40px', left: '36px' }}>🎊</span>
+          <span className="confetti" style={{ top: '60px', right: '44px', animationDelay: '.6s' }}>⚫</span>
+          <span className="confetti" style={{ top: '100px', left: '60px', animationDelay: '1.2s' }}>⚪</span>
+          <span className="confetti" style={{ top: '80px', right: '80px', animationDelay: '1.8s' }}>🎊</span>
+
+          <p className="result-title" style={{ color: gameOverData.isMeWinner ? 'var(--teal-dark)' : 'var(--danger, #e0654f)' }}>
+            {gameOverData.isMeWinner ? '🎉 승리!' : '😢 패배'}
+          </p>
+          <p className="result-sub">
+            {gameOverData.isMeWinner ? '멋진 한 수였습니다!' : '다음 기회에 도전해보세요!'}
+          </p>
+
+          <div className="vs-row">
+            <div className={`side ${gameOverData.isMeWinner ? 'winner' : ''}`}>
+              <div className="avatar">🦁</div>
+              <div className="name">{user?.nickname || '나'} ({myColor === 'black' ? '흑' : '백'})</div>
+            </div>
+            <span className="vs-label">VS</span>
+            <div className={`side ${!gameOverData.isMeWinner ? 'winner' : ''}`}>
+              <div className="avatar">☁️</div>
+              <div className="name">
+                {opponent ? `${opponent.nickname} (${opponent.color === 'black' ? '흑' : '백'})` : '상대방'}
+              </div>
+            </div>
+          </div>
+
+          <div className="list-item">
+            <span className="game-muted">총 턴 수</span>
+            <b>{turnCount}턴</b>
+          </div>
+          {/* 획득 포인트 제거 후 대신 들어갈 '사용한 증강' 영역 */}
+          <div className="list-item" style={{ alignItems: 'flex-start', flexDirection: 'column', gap: '6px' }}>
+            <span className="game-muted">사용한 증강</span>
+            <div style={{ fontSize: '13px', fontWeight: 700, lineHeight: '1.6', color: 'var(--text-main)' }}>
+              {/* 추후 증강 기능 구현 시 배열을 매핑할 자리 */}
+              선택한 증강 없음 (기본 모드)
+            </div>
+          </div>
+
+          <div style={{ flex: 1 }}></div>
+
+          <div className="action-row" style={{ paddingBottom: '18px', gap: '8px', display: 'flex' }}>
+            <button
+              className="game-btn ghost"
+              style={{ flex: 1, background: '#fffefb', border: '1.5px solid var(--card-border)', color: 'var(--text-main)' }}
+              // null로 지우지 않고 가리기만 함
+              onClick={() => setIsOverlayHidden(true)} 
+            >
+              보드판 보기
+            </button>
+            <button
+              className="game-btn"
+              style={{ flex: 1, background: 'var(--teal)', color: '#0e3833', boxShadow: '0 4px 0 var(--teal-dark)', border: 'none' }}
+              onClick={onLeave}
+            >
+              메인으로
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

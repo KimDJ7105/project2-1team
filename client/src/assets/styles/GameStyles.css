@@ -249,3 +249,94 @@
 .game-btn:active {
   transform: translateY(2px);
 }
+
+/* --- 게임 종료 결과 오버레이 --- */
+.result-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(233, 226, 211, 0.95); /* 보드판을 가리면서 배경은 살짝 비치게 처리 */
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  padding: 18px 18px 0;
+  box-sizing: border-box;
+}
+
+.confetti {
+  position: absolute;
+  font-size: 16px;
+  opacity: 0.7;
+  animation: float 3.4s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-10px) rotate(12deg); }
+}
+
+.result-title {
+  font-family: 'Jua', sans-serif;
+  font-size: 38px;
+  text-align: center;
+  margin: 34px 0 4px;
+}
+
+.result-sub {
+  text-align: center;
+  color: var(--text-sub);
+  font-size: 14px;
+  margin: 0 0 20px;
+}
+
+.vs-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 26px;
+  margin-bottom: 22px;
+}
+
+.side {
+  text-align: center;
+}
+
+.side .avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ffd9a0, #ffb877);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  margin: 0 auto 8px;
+}
+
+.side.winner .avatar {
+  box-shadow: 0 0 0 4px var(--teal);
+}
+
+.side .name {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.vs-label {
+  font-family: 'Jua', sans-serif;
+  color: var(--text-sub);
+  font-size: 15px;
+}
+
+.list-item {
+  background: #fffefb;
+  border: 1.5px solid var(--card-border);
+  border-radius: 13px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
