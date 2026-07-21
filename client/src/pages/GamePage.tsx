@@ -71,10 +71,31 @@ export const GamePage: React.FC<GamePageProps> = ({
     return newStones;
   };
 
-  
-
   useEffect(() => {
     if (!socket) return;
+
+    // 플레이어 색상 및 정보 동기화를 담당하는 함수 (불변 값인 email과 nickname을 1, 2순위로 탐색)
+    const syncPlayersInfo = (players: PlayerInfo[]) => {
+      if (!players || !Array.isArray(players)) return;
+
+      const me = players.find((p: PlayerInfo) => 
+        (user?.email && p.email === user.email) ||
+        (user?.nickname && p.nickname === user.nickname) ||
+        (p.socketId && p.socketId === socket.id)
+      );
+      const opp = players.find((p: PlayerInfo) => 
+        (user?.email && p.email !== user.email) ||
+        (user?.nickname && p.nickname !== user.nickname) ||
+        (p.socketId && p.socketId !== socket.id)
+      );
+      
+      if (me && me.color) {
+        setMyColor(me.color);
+      }
+      if (opp && opp.color) {
+        setOpponent(opp);
+      }
+    };
 
     // 초기 상태 및 동기화 응답 처리용 함수
     const handleInitialState = (data: any) => {
@@ -90,25 +111,7 @@ export const GamePage: React.FC<GamePageProps> = ({
       }
 
       if (data.players && Array.isArray(data.players)) {
-        const me = data.players.find((p: PlayerInfo) => 
-          (user?.email && p.email === user.email) ||
-          (user?.nickname && p.nickname === user.nickname) ||
-          (p.socketId && p.socketId === socket.id)
-        );
-        const opp = data.players.find((p: PlayerInfo) => 
-          (user?.email && p.email !== user.email) ||
-          (user?.nickname && p.nickname !== user.nickname) ||
-          (p.socketId && p.socketId !== socket.id)
-        );
-        
-        if (me) {
-          const colorVal = me.color === 'b' ? 'black' : me.color === 'w' ? 'white' : me.color;
-          setMyColor(colorVal as 'black' | 'white');
-        }
-        if (opp) {
-          const oppColorVal = opp.color === 'b' ? 'black' : opp.color === 'w' ? 'white' : opp.color;
-          setOpponent({ ...opp, color: oppColorVal as 'black' | 'white' });
-        }
+        syncPlayersInfo(data.players);
       }
     };
 
@@ -121,6 +124,11 @@ export const GamePage: React.FC<GamePageProps> = ({
         setCurrentTurn(nextTurn);
       }
       if (data.turnCount !== undefined) setTurnCount(data.turnCount);
+
+      // 게임 도중에도 플레이어 정보가 실려올 경우 색상 상태를 다시 보장
+      if (data.players && Array.isArray(data.players)) {
+        syncPlayersInfo(data.players);
+      }
 
       // 서버가 전체 board를 보냈다면 우선적으로 전체 보드 반영
       if (data.board && Array.isArray(data.board)) {
@@ -142,7 +150,8 @@ export const GamePage: React.FC<GamePageProps> = ({
 
     const handleGameOver = (data: any) => {
       console.log('[GamePage] 게임 종료 수신:', data);
-      // 서버가 보낸 승자 색상(data.winner)과 내 색상(myColor)을 비교해 승패 판별
+      
+      // 서버가 보낸 승자 색상과 내 색상(myColor)을 비교해 승패 정확히 판별
       const isWinner = data.winner === myColor;
 
       setGameOverData({
@@ -171,7 +180,7 @@ export const GamePage: React.FC<GamePageProps> = ({
       socket.off('game:error', handleGameError);
       socket.off('game:over', handleGameOver);
     };
-  }, [socket, roomId, user, onLeave]);
+  }, [socket, roomId, user, onLeave, myColor]);
 
   const handleBoardClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!socket) return;
@@ -208,11 +217,11 @@ export const GamePage: React.FC<GamePageProps> = ({
   };
 
   const handleLeaveToMain = () => {
-      if (socket && roomId) {
-        socket.emit('room:leave', { roomId }); // 서버로 퇴장 신호 전송
-      }
-      onLeave(); // 기존 로비 이동 함수 실행
-    };
+    if (socket && roomId) {
+      socket.emit('room:leave', { roomId }); // 서버로 퇴장 신호 전송
+    }
+    onLeave(); // 기존 로비 이동 함수 실행
+  };
 
   const nextAugmentTurn = turnCount <= 15 ? 15 : 30;
   const progressPercent = Math.min(100, ((turnCount % 15) / 15) * 100);
