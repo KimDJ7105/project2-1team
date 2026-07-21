@@ -17,7 +17,26 @@ export class MysqlUserRepository implements UserRepository {
 
     return rows[0] as User;
   }
+// 1-2. 유저 ID로 찾기
+async findById(userId: number): Promise<User | null> {
 
+  const pool = getDbPool();
+
+  const query =
+    'SELECT * FROM users WHERE userId = ?';
+
+  const [rows] =
+    await pool.query<RowDataPacket[]>(
+      query,
+      [userId]
+    );
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return rows[0] as User;
+}
   // 2. 회원 가입
   async signUp(userData: Omit<User, 'userId' | 'createdAt' | 'updatedAt'>): Promise<User> {
     const pool = getDbPool();

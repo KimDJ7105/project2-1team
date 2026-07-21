@@ -9,7 +9,7 @@ import { disconnectTimerManager } from './sessions/disconnectTimerManager';
 import { redisSessionManager } from './sessions/redisSessionManager';
 import { SCRoomSummary } from './shared/types/game_data';
 import { gameRoomManager } from './rooms/GameRoom';
-
+import profileRoutes from './routes/profileRoutes';
 
 const app = express();
 
@@ -23,7 +23,7 @@ app.use(cors({
 
 // API 라우터 등록
 app.use('/api/users', userRoutes);
-
+app.use('/api/profile', profileRoutes);
 const httpServer = createServer(app);
 
 // 2. Socket.io 서버 초기화
