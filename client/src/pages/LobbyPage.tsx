@@ -7,7 +7,7 @@ import CreateRoomModal from '../components/Game/CreateRoomModal.tsx';
 import type { Socket } from 'socket.io-client';
 import type { Room } from '../hooks/useSocket';
 import ProfileView from '../components/Profile/ProfileView';
-import ProfileEditView from '../components/Profile/ProfileEdit';
+import ProfileEdit from '../components/Profile/ProfileEdit';
 import { getProfile,updateNickname } from '../api/profileApi';
 
 interface LobbyPageProps {
@@ -21,12 +21,23 @@ interface LobbyPageProps {
   onJoinSuccess: (roomInfo: { roomId: string; roomTitle: string }) => void;
 }
 
+interface ProfileState {
+  nickname: string;
+  profileImage: string | null;
+  totalGames: number;
+  winCount: number;
+  loseCount: number;
+  drawCount: number;
+  rating: number;
+  winRate: number;
+}
+
 export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout, onJoinSuccess }) => {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showProfileEdit, setShowProfileEdit] = useState(false);
-  const [profile, setProfile] = useState({
+  const [profile, setProfile] = useState<ProfileState>({
   nickname: user.nickname,
   profileImage: null,
   totalGames: 0,
@@ -108,15 +119,12 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout, on
   
     if (showProfileEdit) {
   return (
-   <ProfileEditView
+  <ProfileEdit
   nickname={profile.nickname}
-
-  onBackClick={() =>
-    setShowProfileEdit(false)
-  }
-
-
-  onSave={async(newNickname)=>{
+  email={user.email}
+  userId={user.userId}
+  onBackClick={() => setShowProfileEdit(false)}
+  onSave={async(newNickname) => {
 
   try {
 

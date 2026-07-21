@@ -10,6 +10,17 @@ router.get(
   profileController.getProfile
 );
 
+// 프로필 이미지 업로드 URL 발급
+router.get(
+  '/upload-url',
+  profileController.getUploadUrl
+);
+
+// 프로필 수정
+router.put(
+  '/',
+  profileController.updateProfile
+);
 
 // 닉네임 변경
 router.put(
