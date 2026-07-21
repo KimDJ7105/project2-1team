@@ -207,6 +207,13 @@ export const GamePage: React.FC<GamePageProps> = ({
     }
   };
 
+  const handleLeaveToMain = () => {
+      if (socket && roomId) {
+        socket.emit('room:leave', { roomId }); // 서버로 퇴장 신호 전송
+      }
+      onLeave(); // 기존 로비 이동 함수 실행
+    };
+
   const nextAugmentTurn = turnCount <= 15 ? 15 : 30;
   const progressPercent = Math.min(100, ((turnCount % 15) / 15) * 100);
 
@@ -366,7 +373,7 @@ export const GamePage: React.FC<GamePageProps> = ({
             <button
               className="game-btn"
               style={{ flex: 1, background: 'var(--teal)', color: '#0e3833', boxShadow: '0 4px 0 var(--teal-dark)', border: 'none' }}
-              onClick={onLeave}
+              onClick={handleLeaveToMain}
             >
               메인으로
             </button>
