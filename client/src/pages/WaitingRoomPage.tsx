@@ -36,16 +36,18 @@ export const WaitingRoomPage: React.FC<WaitingRoomPageProps> = ({
   useEffect(() => {
     if (!socket) return;
 
+    // 방의 플레이어 목록 및 상태 업데이트 수신
     const handleRoomUpdate = (data: { players: Player[] }) => {
       if (data && data.players) {
         setPlayers(data.players);
+        // 내 준비 상태 동기화
         const myInfo = data.players.find((p) => p.nickname === user.nickname || p.socketId === socket.id);
         if (myInfo) {
           setIsReady(myInfo.isReady);
         }
       }
     };
-
+    // 게임 시작 이벤트 수신
     const handleGameStart = () => {
       console.log('[게임 시작 이벤트 수신] 본 게임 화면으로 이동합니다.');
       onStartGame();
@@ -53,6 +55,9 @@ export const WaitingRoomPage: React.FC<WaitingRoomPageProps> = ({
 
     socket.on('room:update', handleRoomUpdate);
     socket.on('game:start', handleGameStart);
+
+    // 컴포넌트가 마운트되자마자 방의 최신 정보를 서버에 요청하여 진입 직전 놓친 이벤트를 보완
+    socket.emit('room:get', { roomId });
 
     return () => {
       socket.off('room:update', handleRoomUpdate);
