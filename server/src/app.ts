@@ -272,14 +272,30 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     if (allReady) {
       // 게임 시작 상태로 변경 및 알림
       room.status = 'playing';
+      room.turnCount = 1;
       
-      // 랜덤으로 선공 선택 
-      const firstPlayer = Math.random() < 0.5? Array.from(room.players.values())[0] : Array.from(room.players.values())[1];
+      // 1. 플레이어 목록을 배열로 가져옴
+      const roomPlayers = Array.from(room.players.values());
+      
+      // 2. 랜덤으로 선공(흑돌) 플레이어 선택
+      const firstPlayerIndex = Math.random() < 0.5 ? 0 : 1;
+      const secondPlayerIndex = firstPlayerIndex === 0 ? 1 : 0;
 
-      // 게임 시작 시 초기화된 보드와 턴 정보를 전송
+      // 3. 선공은 'black', 후공은 'white'로 색상 재배정
+      roomPlayers[firstPlayerIndex].color = 'black';
+      roomPlayers[secondPlayerIndex].color = 'white';
+
+      // 4. Map 데이터도 갱신된 색상으로 업데이트
+      room.players.set(roomPlayers[firstPlayerIndex].email, roomPlayers[firstPlayerIndex]);
+      room.players.set(roomPlayers[secondPlayerIndex].email, roomPlayers[secondPlayerIndex]);
+
+      // 5. 현재 턴을 흑돌(선공)의 색상으로 설정
+      room.currentTurn = 'black';
+
+      // 게임 시작 이벤트 발송
       io.to(roomId).emit('game:start', { 
         roomId,
-        turn: firstPlayer.color,
+        turn: room.currentTurn, // 항상 'black' (흑돌 선공)
         turnCount: room.turnCount,
         board: room.board,
         players: Array.from(room.players.values()) 
@@ -341,7 +357,33 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     }
   });
 
-  // 착수 요청 이벤트 핸들러 추가
+  // 보드 상태 동기화 요청 
+  socket.on('game:sync', ({ roomId }: { roomId: string }) => {
+    try {
+      const room = gameRoomManager.getRoom(roomId);
+      if (!room) return;
+
+      // 새로고침이나 화면 전환 시 소켓 ID 갱신
+      if (userEmail && userNickname) {
+        room.addPlayer(userEmail, userNickname, socket.id);
+        socket.join(roomId);
+      }
+
+      socket.emit('game:sync:response', {
+        roomId: room.roomId,
+        status: room.status,
+        turn: room.currentTurn,
+        turnCount: room.turnCount,
+        board: room.board,
+        players: Array.from(room.players.values())
+      });
+      console.log(`[GameSync] ${userNickname} 님의 게임 상태 동기화 완료 (방 ID: ${roomId})`);
+    } catch (err) {
+      console.error('game:sync 처리 에러:', err);
+    }
+  });
+
+  // 착수 요청 이벤트 핸들러
   socket.on('game:put_stone', ({ roomId, x, y }: { roomId: string; x: number; y: number }) => {
     try {
       if (!userEmail) {
