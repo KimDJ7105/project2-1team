@@ -5,6 +5,7 @@ import AuthPage from './pages/AuthPage';
 import { LobbyPage } from './pages/LobbyPage';
 import { getMeAPI, logoutAPI } from './api/auth';
 import { GamePage } from './pages/GamePage';
+import { WaitingRoomPage } from './pages/WaitingRoomPage';
 
 export default function App() {
   const [user, setUser] = useState<any>(null);
@@ -12,7 +13,13 @@ export default function App() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   // 현재 입장한 방 상태 관리 (null이면 로비, 객체가 있으면 게임방)
-  const [currentRoom, setCurrentRoom] = useState<{ roomId: string; roomTitle: string } | null>(null);
+  const [currentRoom, setCurrentRoom] = useState<{ 
+  roomId: string; 
+  roomTitle: string; 
+  players?: any[]; 
+} | null>(null);
+  // 게임 시작 여부 상태 관리 (false면 대기방, true면 본 게임 화면)
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
 
   const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8080';
 
@@ -116,7 +123,25 @@ export default function App() {
           socket={socket}
           user={user}
           onLogout={handleLogout}
-          onJoinSuccess={(roomInfo) => setCurrentRoom(roomInfo)}
+          onJoinSuccess={(roomInfo: { roomId: string; roomTitle: string; players?: any[] }) => {
+            setCurrentRoom(roomInfo);
+            setIsPlaying(false);
+          }}
+        />
+      ) : !isPlaying ? (
+        <WaitingRoomPage
+          socket={socket}
+          roomId={currentRoom.roomId}
+          roomTitle={currentRoom.roomTitle}
+          user={user}
+          initialPlayers={currentRoom.players || []}
+          onLeave={() => {
+            setCurrentRoom(null);
+            setIsPlaying(false);
+          }}
+          onStartGame={() => {
+            setIsPlaying(true);
+          }}
         />
       ) : (
         <GamePage
@@ -124,7 +149,10 @@ export default function App() {
           roomId={currentRoom.roomId}
           roomTitle={currentRoom.roomTitle}
           user={user}
-          onLeave={() => setCurrentRoom(null)}
+          onLeave={() => {
+            setCurrentRoom(null);
+            setIsPlaying(false);
+          }}
         />
       )}
     </div>
