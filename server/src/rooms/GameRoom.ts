@@ -79,6 +79,11 @@ class GameRoomManager {
     return this.rooms.get(roomId);
   }
 
+  // 전체 룸 인스턴스 목록 가져오기
+  public getAllRooms(): GameRoom[] {
+    return Array.from(this.rooms.values());
+  }
+
   // 룸 인스턴스 삭제
   public deleteRoom(roomId: string): void {
     this.rooms.delete(roomId);
