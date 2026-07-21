@@ -276,9 +276,12 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       // 랜덤으로 선공 선택 
       const firstPlayer = Math.random() < 0.5? Array.from(room.players.values())[0] : Array.from(room.players.values())[1];
 
+      // 게임 시작 시 초기화된 보드와 턴 정보를 전송
       io.to(roomId).emit('game:start', { 
         roomId,
-        turn: firstPlayer?.socketId, // 첫 번째 입장한 사람(방장) 흑돌 선공
+        turn: firstPlayer.color,
+        turnCount: room.turnCount,
+        board: room.board,
         players: Array.from(room.players.values()) 
       });
     }
@@ -335,6 +338,54 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       }
     } catch (err) {
       console.error('방 정보 조회 오류:', err);
+    }
+  });
+
+  // 착수 요청 이벤트 핸들러 추가
+  socket.on('game:put_stone', ({ roomId, x, y }: { roomId: string; x: number; y: number }) => {
+    try {
+      if (!userEmail) {
+        socket.emit('game:error', { message: '인증되지 않은 사용자입니다.' });
+        return;
+      }
+
+      const room = gameRoomManager.getRoom(roomId);
+      if (!room) {
+        socket.emit('game:error', { message: '존재하지 않는 방입니다.' });
+        return;
+      }
+
+      // 서버 게임룸의 착수 검증 및 보드 업데이트 실행
+      const result = room.putStone(userEmail, x, y);
+
+      if (!result.success) {
+        // 유효하지 않은 착수 시 요청한 클라이언트에게만 에러 통보
+        socket.emit('game:error', { message: result.message });
+        return;
+      }
+
+      // 착수 성공 시 방 전체 플레이어에게 게임 상태 브로드캐스트
+      io.to(roomId).emit('game:update', {
+        x,
+        y,
+        color: result.color,
+        currentTurn: room.currentTurn,
+        turnCount: room.turnCount,
+        board: room.board
+      });
+
+      // 승리 조건이 달성된 경우 게임 종료 이벤트 발송
+      if (result.isWin) {
+        const winner = Array.from(room.players.values()).find(p => p.color === result.color);
+        io.to(roomId).emit('game:over', {
+          winner: result.color,
+          winnerNickname: winner?.nickname || '알 수 없음',
+          message: `${winner?.nickname || result.color} 님이 5목을 완성하여 승리했습니다!`
+        });
+      }
+    } catch (err) {
+      console.error('착수 처리 중 오류:', err);
+      socket.emit('game:error', { message: '착수 처리 중 서버 오류가 발생했습니다.' });
     }
   });
 
