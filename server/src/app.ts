@@ -63,8 +63,45 @@ io.on('connection', (socket: AuthenticatedSocket) => {
   });
 
   // 접속이 끊겼을 때
-  socket.on('disconnect', () => {
+  socket.on('disconnect', async () => {
     console.log(`[Server] 유저 ${userNickname} 님의 접속이 끊겼습니다. (소켓 ID: ${socket.id})`);
+
+    // 참여 중이던 방이 있는지 확인하고 퇴장 처리하여 유령 플레이어 방지
+    const allRooms = gameRoomManager.getAllRooms();
+    for (const room of allRooms) {
+      // Map의 values에서 현재 끊긴 소켓 ID나 이메일이 일치하는 유저가 있는지 확인
+      const player = Array.from(room.players.values()).find(
+        (p) => p.socketId === socket.id || (userEmail && p.email === userEmail)
+      );
+
+      if (player) {
+        console.log(`[Room] 접속 종료로 인한 방(${room.roomId}) 자동 퇴장 처리: ${player.nickname}`);
+        //leaveRoom 메서드가 내부적으로 소켓 ID를 대조해 플레이어를 제거하고, 0명이면 방을 삭제함
+        gameRoomManager.leaveRoom(room.roomId, player.socketId);
+        
+        // 남은 사람들에게 업데이트 알림
+        const remainingRoom = gameRoomManager.getRoom(room.roomId);
+        if (remainingRoom && remainingRoom.players.size > 0) {
+          io.to(room.roomId).emit('room:update', { players: Array.from(remainingRoom.players.values()) });
+          const updatedRoom = {
+            roomId: remainingRoom.roomId,
+            roomTitle: remainingRoom.roomTitle,
+            playerCount: remainingRoom.players.size,
+            status: remainingRoom.status
+          };
+          await redisSessionManager.saveRoom(room.roomId, updatedRoom);
+        } else {
+          // 남은 사람이 없으면 방 삭제
+          await redisSessionManager.deleteRoom(room.roomId);
+        }
+        
+        // 로비에 갱신된 방 목록 전송
+        const roomsData = await redisSessionManager.getAllRooms();
+        const roomList = roomsData.map((roomStr: string) => JSON.parse(roomStr));
+        io.emit('room:list', roomList);
+        break;
+      }
+    }
 
     if (!userEmail) return;
 
@@ -90,7 +127,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
   socket.on('room:list', async () => {
     try {
       // 1. Redis에서 'game_rooms' 해시의 모든 값을 가져옴
-      // hvals는 방 ID를 키로 가진 모든 JSON 데이터(방 정보)를 배열로 반환합니다.
+      // hvals는 방 ID를 키로 가진 모든 JSON 데이터(방 정보)를 배열로 반환
       const roomsData = await redisSessionManager.getAllRooms();
     
       // 2. 문자열 데이터를 객체(SCRoomSummary)로 변환
@@ -270,12 +307,16 @@ io.on('connection', (socket: AuthenticatedSocket) => {
   socket.on('room:get', ({ roomId }: { roomId: string }) => {
     try {
       const roomInstance = gameRoomManager.getRoom(roomId);
-      if (roomInstance) {
-        // 요청한 소켓(막 진입한 클라이언트)에게만 현재 방의 최신 플레이어 목록을 전송
-        socket.emit('room:update', { 
+      if (roomInstance && userEmail && userNickname) {
+        // 새로고침으로 인해 바뀐 새로운 socket.id로 유저 정보를 갱신
+        roomInstance.addPlayer(userEmail, userNickname, socket.id);
+        socket.join(roomId);
+
+        // 방 전체에 갱신된 플레이어 목록(새 소켓 ID 반영)을 브로드캐스트
+        io.to(roomId).emit('room:update', { 
           players: Array.from(roomInstance.players.values()) 
         });
-        console.log(`[Room] ${userNickname} 님의 요청으로 방(${roomId}) 최신 정보를 동기화했습니다.`);
+        console.log(`[Room] ${userNickname} 님의 재접속(새로고침)으로 방(${roomId}) 소켓 ID를 갱신하고 동기화했습니다.`);
       }
     } catch (err) {
       console.error('방 정보 조회 오류:', err);
