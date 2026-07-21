@@ -6,6 +6,7 @@ import { BottomNav } from '../components/Game/BottomNav';
 import CreateRoomModal from '../components/Game/CreateRoomModal.tsx';
 import type { Socket } from 'socket.io-client';
 import type { Room } from '../hooks/useSocket';
+import ProfileView from '../components/Profile/ProfileView';
 
 interface LobbyPageProps {
   socket: Socket | null;
@@ -17,7 +18,18 @@ interface LobbyPageProps {
 export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout, onJoinSuccess }) => {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
-
+  const [showProfile, setShowProfile] = useState(false);
+  
+  const [profile, setProfile] = useState({
+  nickname: user.nickname,
+  profileImage: null,
+  totalGames: 0,
+  winCount: 0,
+  loseCount: 0,
+  drawCount: 0,
+  rating: 1200,
+  winRate: 0,
+});
   const requestRoomList = useCallback(() => {
     if (socket?.connected) socket.emit('room:list');
   }, [socket]);
@@ -68,6 +80,16 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout, on
   const handleJoinRoom = (roomId: string) => {
     if (socket) socket.emit('room:join', { roomId });
   };
+  
+    if (showProfile) {
+  return (
+    <ProfileView
+      profile={profile}
+      onEditClick={() => {}}
+      onBackClick={() => setShowProfile(false)}
+    />
+  );
+}
 
   return (
     <div className="phone">
@@ -110,7 +132,9 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout, on
 
         <RoomList rooms={rooms} onJoinRoom={handleJoinRoom} />
       </div>
-      <BottomNav />
+      <BottomNav 
+       onProfileClick={() => setShowProfile(true)}
+       />
       <CreateRoomModal
         visible={showCreateModal}
         defaultName={`${user.nickname}의 방`}
