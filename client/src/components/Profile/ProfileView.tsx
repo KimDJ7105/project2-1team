@@ -1,6 +1,5 @@
 // client/src/components/Profile/ProfileView.tsx
 
-import React from 'react';
 import '../../assets/styles/ProfileStyles.css';
 
 interface ProfileData {

@@ -20,7 +20,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout, on
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   
-  const [profile, setProfile] = useState({
+  const [profile] = useState({
   nickname: user.nickname,
   profileImage: null,
   totalGames: 0,
