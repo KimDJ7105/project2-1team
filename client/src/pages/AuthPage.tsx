@@ -1,5 +1,5 @@
 // client/src/pages/AuthPage.tsx
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import LoginForm from '../components/auth/LoginForm';
 import SignupForm from '../components/auth/SignupForm';
 import '../assets/styles/AuthStyles.css';

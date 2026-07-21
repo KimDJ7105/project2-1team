@@ -7,6 +7,8 @@ import userRoutes from './routes/userRoutes'; // 라우터 가져오기
 import { socketAuthMiddleware, AuthenticatedSocket } from './sessions/socketAuth';
 import { disconnectTimerManager } from './sessions/disconnectTimerManager';
 import { redisSessionManager } from './sessions/redisSessionManager';
+import { SCRoomSummary } from './shared/types/game_data';
+import { gameRoomManager } from './rooms/GameRoom';
 
 
 const app = express();
@@ -36,9 +38,6 @@ const io = new Server(httpServer, {
 // Socket.io 전용 인증 미들웨어 장착
 io.use(socketAuthMiddleware);
 
-// 연결 해제 타이머 관리 Map
-export const disconnectTimers = new Map<string, NodeJS.Timeout>();
-
 // 3. 실시간 소켓 통신 이벤트 리스너 정의 (인증을 통과한 소켓만 들어옴)
 io.on('connection', (socket: AuthenticatedSocket) => {
   // 인증 미들웨어에서 바인딩한 유저 정보 추출
@@ -47,11 +46,10 @@ io.on('connection', (socket: AuthenticatedSocket) => {
 
   console.log(`[Server] 유저 ${userNickname}(${userEmail}) 님이 무전기 채널에 접속했습니다! (소켓 ID: ${socket.id})`);
   
-  // 새로고침 등으로 5초 이내에 재연결된 경우: 예약된 세션 삭제 타이머 취소
-  if (userEmail && disconnectTimers.has(userEmail)) {
-    clearTimeout(disconnectTimers.get(userEmail));
-    disconnectTimers.delete(userEmail);
-    console.log(`[세션 유지] ${userNickname}(${userEmail}) 님 새로고침 재연결 감지! (삭제 예약 취소됨)`);
+  // 새로고침 등으로 5초 이내에 재연결된 경우 타이머 취소
+  if (userEmail && disconnectTimerManager.has(userEmail)) {
+    disconnectTimerManager.clear(userEmail);
+    console.log(`[세션 유지] ${userNickname}(${userEmail}) 님 재연결 감지 (삭제 예약 취소)`);
   }
 
   // 클라이언트가 'test_click'이라는 신호를 무전으로 보냈을 때 반응하는 곳
@@ -70,20 +68,141 @@ io.on('connection', (socket: AuthenticatedSocket) => {
 
     if (!userEmail) return;
 
-    // 연결 해제 시 5초 뒤에 Redis 세션을 삭제하는 타이머 시작
+    // 5초 대기 후 redisSessionManager를 통해 세션 및 인덱스 키 정상 파기
     const timer = setTimeout(async () => {
       try {
-        // 현재 이메일로 등록된 세션 키 삭제 (중복 로그인 차단에 사용하신 키 경로 적용)
-        await redisSessionManager.destroySession(`user_session:${userEmail}`);
-        console.log(`[세션 정리 완료] 탭 종료 확정 (5초 경과): ${userNickname}(${userEmail}) 세션 삭제됨`);
+        const sessionId = await redisSessionManager.getActiveSessionByEmail(userEmail);
+        if (sessionId) {
+          await redisSessionManager.destroySession(sessionId);
+          console.log(`[세션 정리 완료] 탭 종료 5초 경과로 세션 파기: ${userEmail}`);
+        }
       } catch (error) {
-        console.error(`[세션 정리 오류] Redis 세션 삭제 실패 (${userEmail}):`, error);
+        console.error(`[세션 정리 오류]:`, error);
       } finally {
-        disconnectTimers.delete(userEmail);
+        disconnectTimerManager.clear(userEmail);
       }
-    }, 5000); // 5초 (5000ms) 대기
+    }, 5000);
 
-    disconnectTimers.set(userEmail, timer);
+    disconnectTimerManager.set(userEmail, timer);
+  });
+
+  // 방 목록 조회 요청 처리
+  socket.on('room:list', async () => {
+    try {
+      // 1. Redis에서 'game_rooms' 해시의 모든 값을 가져옴
+      // hvals는 방 ID를 키로 가진 모든 JSON 데이터(방 정보)를 배열로 반환합니다.
+      const roomsData = await redisSessionManager.getAllRooms();
+    
+      // 2. 문자열 데이터를 객체(SCRoomSummary)로 변환
+      const roomList: SCRoomSummary[] = roomsData.map((data: string) => JSON.parse(data) as SCRoomSummary);
+    
+      // 3. 클라이언트에 전송
+      socket.emit('room:list', roomList);
+    } catch (err) {
+      console.error('방 목록 조회 실패:', err);
+    }
+  });
+
+  socket.on('room:create', async (data: any) => {
+    try {
+    const titleValue = data.roomTitle || data.title;
+
+    // 알파벳과 숫자로 구성된 5자리 무작위 문자열 생성
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let randomId = '';
+    for (let i = 0; i < 5; i++) {
+      randomId += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+
+    // 방 제목과 난수를 조합하여 고유한 방 ID 생성
+    const roomId = `${titleValue}_${randomId}`;
+
+    // 메모리에 룸 인스턴스 생성 및 생성자 참가 처리
+    const roomInstance = gameRoomManager.createRoom(roomId, titleValue);
+    if (userEmail && userNickname) {
+      console.log('서버: 방 생성 성공 이벤트 발송 테스트', roomId);
+      roomInstance.addPlayer(userEmail, userNickname, socket.id);
+      socket.join(roomId); // Socket.io 룸 채널 입장
+    }
+
+    // 클라이언트의 Room 인터페이스와 일치하는 객체 생성
+    const newRoom = {
+      roomId: roomId,
+      roomTitle: titleValue,
+      playerCount: 1, // 방 생성자가 최초 1인으로 참가하므로 1로 설정
+      status: 'waiting'
+    };
+
+    socket.emit('room:join:success', { 
+      roomId: roomId, 
+      roomTitle: titleValue 
+    });
+
+    // Redis에 방 데이터 저장
+    await redisSessionManager.saveRoom(roomId, newRoom);
+
+    // 전체 방 목록을 다시 조회하여 접속 중인 모든 클라이언트에게 갱신된 목록 전송
+    const roomsData = await redisSessionManager.getAllRooms();
+    const roomList = roomsData.map((roomStr: string) => JSON.parse(roomStr));
+
+    io.emit('room:list', roomList);
+    } catch (err) {
+      console.error('방 생성 에러:', err);
+    }
+
+  });
+
+  // 방 참가 이벤트 처리 
+  socket.on('room:join', async (data: { roomId: string }) => {
+    try {
+      const { roomId } = data;
+      if (!userEmail || !userNickname) {
+        socket.emit('room:join:fail', { message: '인증 정보가 없습니다.' });
+        return;
+      }
+
+      // 1. 메모리에서 룸 인스턴스 조회
+      const roomInstance = gameRoomManager.getRoom(roomId);
+      if (!roomInstance) {
+        socket.emit('room:join:fail', { message: '존재하지 않거나 이미 종료된 방입니다.' });
+        return;
+      }
+
+      // 2. 룸 인스턴스에 플레이어 추가 시도 (인원 초과 시 false 반환)
+      const success = roomInstance.addPlayer(userEmail, userNickname, socket.id);
+      if (!success) {
+        socket.emit('room:join:fail', { message: '방 인원이 가득 찼습니다.' });
+        return;
+      }
+
+      // 3. Socket.io 룸 채널 입장
+      socket.join(roomId);
+
+      // 4. Redis의 방 정보 업데이트 (참가자 수 동기화)
+      const updatedRoom = {
+        roomId: roomInstance.roomId,
+        roomTitle: roomInstance.roomTitle,
+        playerCount: roomInstance.players.size,
+        status: roomInstance.status
+      };
+      await redisSessionManager.saveRoom(roomId, updatedRoom);
+
+      // 5. 입장 성공 알림 및 해당 방에 입장 완료 데이터 전송
+      socket.emit('room:join:success', { 
+        roomId: roomInstance.roomId, 
+        roomTitle: roomInstance.roomTitle 
+      });
+    
+      // 6. 전체 로비 유저들에게 변경된 인원수 반영을 위해 방 목록 다시 전송
+      const roomsData = await redisSessionManager.getAllRooms();
+      const roomList = roomsData.map((roomStr: string) => JSON.parse(roomStr));
+      io.emit('room:list', roomList);
+
+      console.log(`[Room] ${userNickname}(${userEmail}) 님이 방(${roomId})에 입장했습니다.`);
+    } catch (err) {
+      console.error('방 입장 처리 중 오류:', err);
+      socket.emit('room:join:fail', { message: '방 입장 처리 중 서버 오류가 발생했습니다.' });
+    }
   });
 });
 

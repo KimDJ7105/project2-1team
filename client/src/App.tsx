@@ -1,17 +1,22 @@
 // client/src/App.tsx
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { io, Socket } from 'socket.io-client';
 import AuthPage from './pages/AuthPage';
+import { LobbyPage } from './pages/LobbyPage';
 import { getMeAPI, logoutAPI } from './api/auth';
+import { GamePage } from './pages/GamePage';
 
 export default function App() {
   const [user, setUser] = useState<any>(null);
   const [socket, setSocket] = useState<Socket | null>(null);
-  const [log, setLog] = useState<string>('소켓 연결을 대기 중입니다...');
   const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // 현재 입장한 방 상태 관리 (null이면 로비, 객체가 있으면 게임방)
+  const [currentRoom, setCurrentRoom] = useState<{ roomId: string; roomTitle: string } | null>(null);
 
   const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8080';
 
+  // 1. 세션 복구 로직
   useEffect(() => {
     const restoreSession = async () => {
       const savedToken = sessionStorage.getItem('token');
@@ -22,7 +27,6 @@ export default function App() {
       }
 
       try {
-        // 서버의 /api/users/me 창구로 데이터 요청
         const data = await getMeAPI(savedToken);
         
         if (data && data.user) {
@@ -33,7 +37,6 @@ export default function App() {
         }
       } catch (error) {
         console.error('세션 복구 실패(만료되었거나 잘못된 토큰):', error);
-        // 토큰이 만료되었거나 비정상적이면 보관함 비우기
         sessionStorage.removeItem('token');
       } finally {
         setIsLoading(false);
@@ -43,6 +46,7 @@ export default function App() {
     restoreSession();
   }, []);
 
+  // 2. 소켓 연결 로직
   useEffect(() => {
     if (!user) return;
     
@@ -55,7 +59,6 @@ export default function App() {
 
     console.log('소켓 연결 시도 토큰 수신 확인:', currentToken);
 
-    // 소켓 연결
     const socketInstance = io(API_BASE_URL, {
       withCredentials: true,
       auth: {
@@ -64,19 +67,15 @@ export default function App() {
     });
 
     socketInstance.on('connect', () => {
-      setLog(`[소켓 연결 완료] ${user.nickname}님 환영합니다! (ID: ${socketInstance.id})`);
+      console.log(`[소켓 연결 완료] ${user.nickname}님 환영합니다! (ID: ${socketInstance.id})`);
     });
 
     socketInstance.on('connect_error', (err) => {
-      setLog((prev) => `${prev}\n[소켓 연결 에러]: ${err.message}`);
-    });
-
-    socketInstance.on('test_response', (data: { message: string }) => {
-      setLog((prev) => `${prev}\n[서버 응답 수신]: ${data.message}`);
+      console.error(`[소켓 연결 에러]: ${err.message}`);
     });
 
     socketInstance.on('disconnect', () => {
-      setLog((prev) => `${prev}\n[소켓 연결 종료]`);
+      console.log('[소켓 연결 종료]');
     });
 
     setSocket(socketInstance);
@@ -86,15 +85,7 @@ export default function App() {
     };
   }, [user, API_BASE_URL]);
 
-  const handleTestClick = () => {
-    if (socket) {
-      socket.emit('test_click', { 
-        sender: user?.nickname || '무명유저', 
-        text: 'Hello, Server!' 
-      });
-    }
-  };
-
+  // 3. 로그아웃 처리 로직
   const handleLogout = async () => {
     try {
       await logoutAPI();
@@ -103,6 +94,7 @@ export default function App() {
     }
 
     setUser(null);
+    setCurrentRoom(null);
     if (socket) {
       socket.disconnect();
     }
@@ -114,26 +106,26 @@ export default function App() {
     return <div style={{ padding: '20px', textAlign: 'center' }}>인증 정보를 확인 중입니다...</div>;
   }
 
+  // 4. 화면 전환 라우팅 로직 
   return (
     <div style={styles.appContainer}>
       {!user ? (
         <AuthPage onAuthSuccess={(loggedInUser) => setUser(loggedInUser)} />
+      ) : !currentRoom ? (
+        <LobbyPage
+          socket={socket}
+          user={user}
+          onLogout={handleLogout}
+          onJoinSuccess={(roomInfo) => setCurrentRoom(roomInfo)}
+        />
       ) : (
-        <div style={styles.gameArea}>
-          <h1 style={styles.mainTitle}>실시간 오목 게임 테스트</h1>
-          <div style={styles.profileHeader}>
-            <p><strong>접속자:</strong> {user.nickname} ({user.email})</p>
-            <button onClick={handleLogout} style={styles.logoutButton}>로그아웃</button>
-          </div>
-
-          <div style={styles.testControl}>
-            <button onClick={handleTestClick} style={styles.testButton}>
-              무전 보내기 (test_click 패킷 송신)
-            </button>
-          </div>
-
-          <pre style={styles.logBox}>{log}</pre>
-        </div>
+        <GamePage
+          socket={socket}
+          roomId={currentRoom.roomId}
+          roomTitle={currentRoom.roomTitle}
+          user={user}
+          onLeave={() => setCurrentRoom(null)}
+        />
       )}
     </div>
   );
@@ -144,59 +136,9 @@ const styles = {
     fontFamily: "'Gowun Dodum', sans-serif",
     width: '100%',
     margin: '0 auto',
-  },
-  mainTitle: {
-    textAlign: 'center' as const,
-    color: '#333',
-    fontSize: '22px',
-    marginBottom: '15px',
-  },
-  gameArea: {
-    border: '1px solid #ddd',
-    padding: '20px',
-    borderRadius: '8px',
-    backgroundColor: '#fafafa',
-    maxWidth: '600px',
-    margin: '40px auto 0',
-  },
-  profileHeader: {
+    backgroundColor: '#e9e2d3',
+    minHeight: '100vh',
     display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderBottom: '1px solid #eee',
-    paddingBottom: '10px',
-    marginBottom: '20px',
-  },
-  logoutButton: {
-    padding: '5px 10px',
-    backgroundColor: '#dc3545',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-  },
-  testControl: {
-    marginBottom: '15px',
-  },
-  testButton: {
-    width: '100%',
-    padding: '12px',
-    fontSize: '15px',
-    backgroundColor: '#28a745',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontWeight: 'bold' as const,
-  },
-  logBox: {
-    backgroundColor: '#1e1e1e',
-    color: '#39ff14',
-    padding: '15px',
-    borderRadius: '4px',
-    minHeight: '120px',
-    whiteSpace: 'pre-wrap' as const,
-    wordBreak: 'break-all' as const,
-    fontSize: '13px',
+    justifyContent: 'center',
   },
 };
