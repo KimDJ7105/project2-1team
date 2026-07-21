@@ -39,7 +39,12 @@ function resolveEnvVars(obj: unknown): unknown {
   if (typeof obj === 'string') {
     // 문자열이면 패턴 매칭 후 환경변수로 치환
     return obj.replace(/\$\{(\w+):?(.*?)\}/g, (_, key, defaultVal) => {
-      return process.env[key] ?? defaultVal;
+      const envVal = process.env[key];
+      // process.env 값이 존재하고 빈 문자열이 아니면 사용, 없으면 기본값 사용
+      if (envVal !== undefined && envVal !== '') {
+        return envVal;
+      }
+      return defaultVal !== undefined ? defaultVal : '';
     });
   }
   if (Array.isArray(obj)) {
