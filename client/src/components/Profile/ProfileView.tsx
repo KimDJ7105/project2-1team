@@ -1,6 +1,5 @@
 // client/src/components/Profile/ProfileView.tsx
 
-import React from 'react';
 import '../../assets/styles/ProfileStyles.css';
 
 interface ProfileData {
@@ -8,7 +7,7 @@ interface ProfileData {
   profileImage: string | null;
 
   totalGames: number;
-  winCount: number;
+  winCount: number; 
   loseCount: number;
   drawCount: number;
 

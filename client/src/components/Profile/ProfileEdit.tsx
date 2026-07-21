@@ -9,7 +9,7 @@ interface ProfileEditViewProps {
 
 export default function ProfileEditView({
   nickname,
-  onSave,
+  onSave, 
   onBackClick,
 }: ProfileEditViewProps) {
   const [editNickname, setEditNickname] = useState(nickname);

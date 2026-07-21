@@ -176,9 +176,10 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout, on
       <CreateRoomModal
         visible={showCreateModal}
         defaultName={`${user.nickname}의 방`}
-        onClose={handleModalClose}
+        onClose={handleModalClose} 
         onCreate={handleModalCreate}
       />
+      
     </div>
   );
 };
