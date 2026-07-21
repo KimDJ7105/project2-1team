@@ -5,6 +5,7 @@ export interface Player {
   nickname: string;
   socketId: string;
   color: 'black' | 'white';
+  isReady: boolean;
 }
 
 export class GameRoom {
@@ -36,13 +37,15 @@ export class GameRoom {
     }
 
     // 첫 번째 유저는 흑돌, 두 번째 유저는 백돌 지정
+    // todo. 게임 시작 전 선택 하게 하거나 랜덤으로 돌리기
     const color = this.players.size === 0 ? 'black' : 'white';
     
     this.players.set(email, {
       email,
       nickname,
       socketId,
-      color
+      color,
+      isReady: false
     });
 
     return true;
@@ -79,6 +82,23 @@ class GameRoomManager {
   // 룸 인스턴스 삭제
   public deleteRoom(roomId: string): void {
     this.rooms.delete(roomId);
+  }
+
+  public leaveRoom(roomId: string, socketId: string): void {
+    const room = this.getRoom(roomId);
+    if (!room) return;
+
+    for (const [email, player] of room.players.entries()) {
+      if (player.socketId === socketId) {
+        room.removePlayer(email);
+        break;
+      }
+    }
+
+    // 방에 남은 인원이 없다면 메모리에서 방 인스턴스 삭제
+    if (room.players.size === 0) {
+      this.deleteRoom(roomId);
+    }
   }
 }
 

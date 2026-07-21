@@ -137,6 +137,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       roomId: roomId, 
       roomTitle: titleValue 
     });
+    io.to(roomId).emit('room:update', { players: Array.from(roomInstance.players.values()) });
 
     // Redis에 방 데이터 저장
     await redisSessionManager.saveRoom(roomId, newRoom);
@@ -192,6 +193,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
         roomId: roomInstance.roomId, 
         roomTitle: roomInstance.roomTitle 
       });
+      io.to(roomId).emit('room:update', { players: Array.from(roomInstance.players.values()) });
     
       // 6. 전체 로비 유저들에게 변경된 인원수 반영을 위해 방 목록 다시 전송
       const roomsData = await redisSessionManager.getAllRooms();
@@ -204,6 +206,66 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       socket.emit('room:join:fail', { message: '방 입장 처리 중 서버 오류가 발생했습니다.' });
     }
   });
+
+  // 준비 완료 이벤트 
+  socket.on('room:ready', ({ roomId }) => {
+    const room = gameRoomManager.getRoom(roomId);
+    if (!room) return;
+
+    // Map 구조의 값들을 배열로 변환하여 소켓 ID로 플레이어 검색
+    const playersArray = Array.from(room.players.values());
+    const player = playersArray.find(p => p.socketId === socket.id);
+    if (player) {
+      player.isReady = !player.isReady; // 준비 취소도 가능하도록 토글
+    }
+
+    // 방에 있는 모든 사람에게 현재 인원 및 준비 상태 브로드캐스트
+    io.to(roomId).emit('room:update', { players: Array.from(room.players.values()) });
+
+    // 2명이 모두 모였고, 2명 모두 준비 완료 상태인지 확인 (size와 every 사용)
+    const allReady = room.players.size === 2 && Array.from(room.players.values()).every(p => p.isReady);
+    if (allReady) {
+      // 게임 시작 상태로 변경 및 알림
+      room.status = 'playing';
+      
+      // 랜덤으로 선공 선택 
+      const firstPlayer = Math.random() < 0.5? Array.from(room.players.values())[0] : Array.from(room.players.values())[1];
+
+      io.to(roomId).emit('game:start', { 
+        roomId,
+        turn: firstPlayer?.socketId, // 첫 번째 입장한 사람(방장) 흑돌 선공
+        players: Array.from(room.players.values()) 
+      });
+    }
+  });
+
+  // 방 나가기(뒤로가기) 핸들러도 확인/추가
+  socket.on('room:leave', async ({ roomId }) => {
+    socket.leave(roomId);
+    gameRoomManager.leaveRoom(roomId, socket.id);
+    // 남은 사람들에게 인원 변경 알림
+    const room = gameRoomManager.getRoom(roomId);
+    if (room) {
+      io.to(roomId).emit('room:update', { players: Array.from(room.players.values()) });
+      
+      const updatedRoom = {
+        roomId: room.roomId,
+        roomTitle: room.roomTitle,
+        playerCount: room.players.size,
+        status: room.status
+      };
+      await redisSessionManager.saveRoom(roomId, updatedRoom);
+    } else {
+      // 남은 사람이 없어 방이 삭제된 경우 Redis에서도 제거
+      await redisSessionManager.deleteRoom(roomId);
+    }
+
+    // 로비에 있는 유저들에게 방 목록 갱신 전송
+    const roomsData = await redisSessionManager.getAllRooms();
+    const roomList = roomsData.map((roomStr: string) => JSON.parse(roomStr));
+    io.emit('room:list', roomList);
+  });
+
 });
 
 // 데이터베이스 초기화 및 서버 구동을 위한 비동기 래퍼 함수
