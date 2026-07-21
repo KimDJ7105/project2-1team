@@ -13,9 +13,6 @@ export default function LoginForm({ onSwitch, onAuthSuccess }: LoginFormProps) {
   const [message, setMessage] = useState('');
   const [isError, setIsError] = useState(false);
 
-  // 환경변수가 없을 시 기본 포트 8080 서버 연동
-  const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8080';
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage('');

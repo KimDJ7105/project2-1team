@@ -13,8 +13,6 @@ export default function SignupForm({ onSwitch }: SignupFormProps) {
   const [message, setMessage] = useState('');
   const [isError, setIsError] = useState(false);
 
-  const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8080';
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage('');
