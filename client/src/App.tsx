@@ -28,8 +28,7 @@ export default function App() {
     return savedPlaying === 'true';
   });
 
-  const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8080';
-
+  const API_BASE_URL = import.meta.env.VITE_SERVER_URL
   // 방 상태나 게임 상태가 변경될 때마다 세션스토리지에 동기화
   const handleRoomChange = (roomInfo: any) => {
     setCurrentRoom(roomInfo);

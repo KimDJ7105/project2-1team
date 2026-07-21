@@ -1,4 +1,4 @@
-// client/src/hooks/userSocket.ts
+// client/src/hooks/useSocket.ts
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 
@@ -8,6 +8,8 @@ export interface Room {
   playerCount: number; // 플레이어 수, 1 또는 2
   status: 'waiting' | 'playing'; // 방 상태
 }
+
+const API_BASE_URL = import.meta.env.VITE_SERVER_URL;
 
 export const useSocket = (token: string | null) => {
   const socketRef = useRef<Socket | null>(null);
@@ -29,7 +31,7 @@ export const useSocket = (token: string | null) => {
   useEffect(() => {
     if (!token) return;
 
-    const socket = io(window.location.origin, {
+    const socket = io(API_BASE_URL, {
       auth: { token },
       reconnectionAttempts: 5,
     });
