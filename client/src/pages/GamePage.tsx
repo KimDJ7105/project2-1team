@@ -39,48 +39,50 @@ export const GamePage: React.FC<GamePageProps> = ({
   const [stones, setStones] = useState<Stone[]>([]);
   const [myAugments, setMyAugments] = useState<string[]>(['＋', '🌫️']);
 
+  // 서버의 2차원 보드 데이터를 돌 객체 배열로 변환
   const parseBoardToStones = (board: any[][]): Stone[] => {
-    if (!board || !Array.isArray(board)) return [];
+    if (!board || !Array.isArray(board)) {
+      console.warn('[오류] board 데이터가 배열이 아닙니다:', board);
+      return [];
+    }
+
     const newStones: Stone[] = [];
     for (let y = 0; y < 15; y++) {
       for (let x = 0; x < 15; x++) {
         const val = board[y]?.[x];
-        if (val === 'black' || val === 'b') {
-          newStones.push({ x, y, color: 'black' });
-        } else if (val === 'white' || val === 'w') {
-          newStones.push({ x, y, color: 'white' });
+        // 빈칸이 아니며 유효한 값이 존재할 경우 전부 돌로 인식하여 강제 렌더링
+        if (val && val !== '') {
+          const colorStr = String(val).toLowerCase();
+          const color: 'black' | 'white' = 
+            colorStr.includes('w') || colorStr.includes('white') ? 'white' : 'black';
+          
+          newStones.push({ x, y, color });
         }
       }
     }
+    //console.log('[디버깅] 파싱된 돌 목록:', newStones);
     return newStones;
   };
+
+  
 
   useEffect(() => {
     if (!socket) return;
 
-    // 공통 상태 적용 함수 (game:start, game:sync:response, game:update에서 사용)
-    const applyGameState = (data: any) => {
-      console.log('[GamePage] 상태 데이터 반영:', data);
+    // 초기 상태 및 동기화 응답 처리용 함수
+    const handleInitialState = (data: any) => {
+      console.log('[GamePage] 초기/동기화 데이터 수신:', data);
 
       const nextTurn = data.turn || data.currentTurn;
-      if (nextTurn === 'black' || nextTurn === 'white' || nextTurn === 'b' || nextTurn === 'w') {
+      if (nextTurn) {
         setCurrentTurn(nextTurn === 'b' ? 'black' : nextTurn === 'w' ? 'white' : nextTurn);
       }
-
       if (data.turnCount !== undefined) setTurnCount(data.turnCount);
-
       if (data.board) {
         setStones(parseBoardToStones(data.board));
-      } else if (data.x !== undefined && data.y !== undefined && data.color) {
-        const colorVal = data.color === 'b' ? 'black' : data.color === 'w' ? 'white' : data.color;
-        setStones((prev) => {
-          if (prev.some((s) => s.x === data.x && s.y === data.y)) return prev;
-          return [...prev, { x: data.x, y: data.y, color: colorVal as 'black' | 'white' }];
-        });
       }
 
       if (data.players && Array.isArray(data.players)) {
-        // 이메일, 닉네임, 소켓 ID 중 하나로 내 정보 식별
         const me = data.players.find((p: PlayerInfo) => 
           (user?.email && p.email === user.email) ||
           (user?.nickname && p.nickname === user.nickname) ||
@@ -103,6 +105,30 @@ export const GamePage: React.FC<GamePageProps> = ({
       }
     };
 
+    // 착수 성공 시 서버가 보내는 갱신 신호 처리
+    const handleGameUpdate = (data: any) => {
+      console.log('[GamePage] 게임 업데이트 수신:', data);
+
+      if (data.currentTurn) {
+        const nextTurn = data.currentTurn === 'b' ? 'black' : data.currentTurn === 'w' ? 'white' : data.currentTurn;
+        setCurrentTurn(nextTurn);
+      }
+      if (data.turnCount !== undefined) setTurnCount(data.turnCount);
+
+      // 서버가 전체 board를 보냈다면 우선적으로 전체 보드 반영
+      if (data.board && Array.isArray(data.board)) {
+        setStones(parseBoardToStones(data.board));
+      } 
+      // 만약 개별 좌표로 들어왔다면 기존 stones 배열에 추가
+      else if (data.x !== undefined && data.y !== undefined && data.color) {
+        const colorVal = data.color === 'b' ? 'black' : data.color === 'w' ? 'white' : data.color;
+        setStones((prev) => {
+          if (prev.some((s) => s.x === data.x && s.y === data.y)) return prev;
+          return [...prev, { x: data.x, y: data.y, color: colorVal as 'black' | 'white' }];
+        });
+      }
+    };
+
     const handleGameError = (data: { message: string }) => {
       alert(`[오류] ${data.message}`);
     };
@@ -112,19 +138,19 @@ export const GamePage: React.FC<GamePageProps> = ({
       onLeave();
     };
 
-    socket.on('game:start', applyGameState);
-    socket.on('game:sync:response', applyGameState);
-    socket.on('game:update', applyGameState);
+    socket.on('game:start', handleInitialState);
+    socket.on('game:sync:response', handleInitialState);
+    socket.on('game:update', handleGameUpdate); // 분리된 핸들러 연결
     socket.on('game:error', handleGameError);
     socket.on('game:over', handleGameOver);
 
-    // 컴포넌트 마운트 즉시 게임 상태 동기화 요청 (이벤트 놓침 해결의 핵심)
+    // 진입 즉시 동기화 요청
     socket.emit('game:sync', { roomId });
 
     return () => {
-      socket.off('game:start', applyGameState);
-      socket.off('game:sync:response', applyGameState);
-      socket.off('game:update', applyGameState);
+      socket.off('game:start', handleInitialState);
+      socket.off('game:sync:response', handleInitialState);
+      socket.off('game:update', handleGameUpdate);
       socket.off('game:error', handleGameError);
       socket.off('game:over', handleGameOver);
     };
