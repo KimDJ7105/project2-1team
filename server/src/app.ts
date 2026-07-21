@@ -266,6 +266,22 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     io.emit('room:list', roomList);
   });
 
+  //방 정보 동기화 요청 
+  socket.on('room:get', ({ roomId }: { roomId: string }) => {
+    try {
+      const roomInstance = gameRoomManager.getRoom(roomId);
+      if (roomInstance) {
+        // 요청한 소켓(막 진입한 클라이언트)에게만 현재 방의 최신 플레이어 목록을 전송
+        socket.emit('room:update', { 
+          players: Array.from(roomInstance.players.values()) 
+        });
+        console.log(`[Room] ${userNickname} 님의 요청으로 방(${roomId}) 최신 정보를 동기화했습니다.`);
+      }
+    } catch (err) {
+      console.error('방 정보 조회 오류:', err);
+    }
+  });
+
 });
 
 // 데이터베이스 초기화 및 서버 구동을 위한 비동기 래퍼 함수
