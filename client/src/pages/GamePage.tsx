@@ -17,6 +17,14 @@ interface Stone {
   isAugmented?: boolean;
 }
 
+interface PlayerInfo {
+  email?: string;
+  nickname: string;
+  socketId?: string;
+  color: 'black' | 'white';
+  isReady?: boolean;
+}
+
 export const GamePage: React.FC<GamePageProps> = ({
   socket,
   roomId,
@@ -27,18 +35,102 @@ export const GamePage: React.FC<GamePageProps> = ({
   const [turnCount, setTurnCount] = useState<number>(1);
   const [currentTurn, setCurrentTurn] = useState<'black' | 'white'>('black');
   const [myColor, setMyColor] = useState<'black' | 'white'>('black');
-  const [stones, setStones] = useState<Stone[]>([
-    { x: 7, y: 7, color: 'black' },
-    { x: 8, y: 7, color: 'white', isAugmented: true },
-  ]);
+  const [opponent, setOpponent] = useState<PlayerInfo | null>(null);
+  const [stones, setStones] = useState<Stone[]>([]);
+  const [myAugments, setMyAugments] = useState<string[]>(['＋', '🌫️']);
 
-  const [myAugments, setMyAugments] = useState<string[]>(['➕', '🌫️']);
+  // 서버의 2차원 보드 데이터를 돌 객체 배열로 변환
+  const parseBoardToStones = (board: any[][]): Stone[] => {
+    if (!board || !Array.isArray(board)) {
+      console.warn('[오류] board 데이터가 배열이 아닙니다:', board);
+      return [];
+    }
+
+    const newStones: Stone[] = [];
+    for (let y = 0; y < 15; y++) {
+      for (let x = 0; x < 15; x++) {
+        const val = board[y]?.[x];
+        // 빈칸이 아니며 유효한 값이 존재할 경우 전부 돌로 인식하여 강제 렌더링
+        if (val && val !== '') {
+          const colorStr = String(val).toLowerCase();
+          const color: 'black' | 'white' = 
+            colorStr.includes('w') || colorStr.includes('white') ? 'white' : 'black';
+          
+          newStones.push({ x, y, color });
+        }
+      }
+    }
+    //console.log('[디버깅] 파싱된 돌 목록:', newStones);
+    return newStones;
+  };
+
+  
 
   useEffect(() => {
     if (!socket) return;
 
+    // 초기 상태 및 동기화 응답 처리용 함수
+    const handleInitialState = (data: any) => {
+      console.log('[GamePage] 초기/동기화 데이터 수신:', data);
+
+      const nextTurn = data.turn || data.currentTurn;
+      if (nextTurn) {
+        setCurrentTurn(nextTurn === 'b' ? 'black' : nextTurn === 'w' ? 'white' : nextTurn);
+      }
+      if (data.turnCount !== undefined) setTurnCount(data.turnCount);
+      if (data.board) {
+        setStones(parseBoardToStones(data.board));
+      }
+
+      if (data.players && Array.isArray(data.players)) {
+        const me = data.players.find((p: PlayerInfo) => 
+          (user?.email && p.email === user.email) ||
+          (user?.nickname && p.nickname === user.nickname) ||
+          (p.socketId && p.socketId === socket.id)
+        );
+        const opp = data.players.find((p: PlayerInfo) => 
+          (user?.email && p.email !== user.email) ||
+          (user?.nickname && p.nickname !== user.nickname) ||
+          (p.socketId && p.socketId !== socket.id)
+        );
+        
+        if (me) {
+          const colorVal = me.color === 'b' ? 'black' : me.color === 'w' ? 'white' : me.color;
+          setMyColor(colorVal as 'black' | 'white');
+        }
+        if (opp) {
+          const oppColorVal = opp.color === 'b' ? 'black' : opp.color === 'w' ? 'white' : opp.color;
+          setOpponent({ ...opp, color: oppColorVal as 'black' | 'white' });
+        }
+      }
+    };
+
+    // 착수 성공 시 서버가 보내는 갱신 신호 처리
     const handleGameUpdate = (data: any) => {
-      console.log('[GamePage] 서버 게임 상태 수신:', data);
+      console.log('[GamePage] 게임 업데이트 수신:', data);
+
+      if (data.currentTurn) {
+        const nextTurn = data.currentTurn === 'b' ? 'black' : data.currentTurn === 'w' ? 'white' : data.currentTurn;
+        setCurrentTurn(nextTurn);
+      }
+      if (data.turnCount !== undefined) setTurnCount(data.turnCount);
+
+      // 서버가 전체 board를 보냈다면 우선적으로 전체 보드 반영
+      if (data.board && Array.isArray(data.board)) {
+        setStones(parseBoardToStones(data.board));
+      } 
+      // 만약 개별 좌표로 들어왔다면 기존 stones 배열에 추가
+      else if (data.x !== undefined && data.y !== undefined && data.color) {
+        const colorVal = data.color === 'b' ? 'black' : data.color === 'w' ? 'white' : data.color;
+        setStones((prev) => {
+          if (prev.some((s) => s.x === data.x && s.y === data.y)) return prev;
+          return [...prev, { x: data.x, y: data.y, color: colorVal as 'black' | 'white' }];
+        });
+      }
+    };
+
+    const handleGameError = (data: { message: string }) => {
+      alert(`[오류] ${data.message}`);
     };
 
     const handleGameOver = (data: any) => {
@@ -46,20 +138,29 @@ export const GamePage: React.FC<GamePageProps> = ({
       onLeave();
     };
 
-    socket.on('game:update', handleGameUpdate);
+    socket.on('game:start', handleInitialState);
+    socket.on('game:sync:response', handleInitialState);
+    socket.on('game:update', handleGameUpdate); // 분리된 핸들러 연결
+    socket.on('game:error', handleGameError);
     socket.on('game:over', handleGameOver);
 
+    // 진입 즉시 동기화 요청
+    socket.emit('game:sync', { roomId });
+
     return () => {
+      socket.off('game:start', handleInitialState);
+      socket.off('game:sync:response', handleInitialState);
       socket.off('game:update', handleGameUpdate);
+      socket.off('game:error', handleGameError);
       socket.off('game:over', handleGameOver);
     };
-  }, [socket, onLeave]);
+  }, [socket, roomId, user, onLeave]);
 
   const handleBoardClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!socket) return;
     
     if (currentTurn !== myColor) {
-      console.log('내 턴이 아닙니다.');
+      console.log(`[클릭 차단] 현재 턴(${currentTurn})과 내 색상(${myColor})이 다릅니다.`);
       return;
     }
 
@@ -72,11 +173,12 @@ export const GamePage: React.FC<GamePageProps> = ({
 
     if (x < 0 || x > 14 || y < 0 || y > 14) return;
 
-    console.log(`[클라이언트 착수 시도] 좌표: (${x}, ${y})`);
+    if (stones.some((s) => s.x === x && s.y === y)) {
+      return;
+    }
 
-    setStones((prev) => [...prev, { x, y, color: myColor }]);
-    setCurrentTurn(currentTurn === 'black' ? 'white' : 'black');
-    setTurnCount((prev) => prev + 1);
+    console.log(`[클라이언트 착수 요청] 좌표: (${x}, ${y}), 내 색상: ${myColor}`);
+    socket.emit('game:put_stone', { roomId, x, y });
   };
 
   const handleSurrender = () => {
@@ -109,7 +211,9 @@ export const GamePage: React.FC<GamePageProps> = ({
           <span className="game-timer">⏱ 00:45</span>
           <div className="game-row">
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: '13px', fontWeight: 700 }}>상대방</div>
+              <div style={{ fontSize: '13px', fontWeight: 700 }}>
+                {opponent ? `${opponent.nickname} (${opponent.color === 'black' ? '흑' : '백'})` : '상대방'}
+              </div>
               {currentTurn !== myColor ? (
                 <div className="game-badge" style={{ background: '#f0dfc0' }}>상대 차례</div>
               ) : (
@@ -140,12 +244,15 @@ export const GamePage: React.FC<GamePageProps> = ({
           <div className="star-point" style={{ top: getStarPos(11), left: getStarPos(11) }}></div>
 
           {stones.map((stone, idx) => {
-            const pixelX = 14 + stone.x * 22;
-            const pixelY = 14 + stone.y * 22;
+            // border(7px)와 grid-lines의 오프셋(14px)을 더해 주어야 격자 교차점과 정확히 일치함
+            const pixelX = 2 + 14 + stone.x * 22;
+            const pixelY = 2 + 14 + stone.y * 22;
+            // 공백 방지 
+            const stoneClass = `stone ${stone.color === 'black' ? 'b' : 'w'}${stone.isAugmented ? ' aug' : ''}`;
             return (
               <div
                 key={idx}
-                className={`stone ${stone.color === 'black' ? 'b' : 'w'} ${stone.isAugmented ? 'aug' : ''}`}
+                className={stoneClass}
                 style={{ top: `${pixelY}px`, left: `${pixelX}px` }}
               ></div>
             );
