@@ -5,7 +5,7 @@ import axios from 'axios';
 
 // 백엔드 Express 서버 주소를 베이스 URL로 설정
 const API = axios.create({
-  baseURL: 'http://localhost:8080/api/users',
+  baseURL: import.meta.env.VITE_SERVER_URL,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -54,25 +54,25 @@ export interface AuthResponse {
 
 // 1. 회원가입 API 호출 함수
 export const registerAPI = async (data: RegisterRequest): Promise<AuthResponse> => {
-  const response = await API.post<AuthResponse>('/register', data);
+  const response = await API.post<AuthResponse>('/api/users/register', data);
   return response.data;
 };
 
 // 2. 로그인 API 호출 함수
 export const loginAPI = async (data: LoginRequest): Promise<AuthResponse> => {
-  const response = await API.post<AuthResponse>('/login', data);
+  const response = await API.post<AuthResponse>('/api/users/login', data);
   return response.data;
 };
 
 // 3. 로그아웃 API 호출 함수
 export const logoutAPI = async () => {
   const token = sessionStorage.getItem('token');
-  return await API.post('/logout', { token });
+  return await API.post('/api/users/logout', { token });
 };
 
 // 4. 세션 검증 API 호출 
 export const getMeAPI = async (token: string): Promise<AuthResponse> => {
-  const response = await API.get('/me', {
+  const response = await API.get('/api/users/me', {
     headers: {
       Authorization: `Bearer ${token}`,
     },

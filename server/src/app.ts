@@ -9,6 +9,7 @@ import { disconnectTimerManager } from './sessions/disconnectTimerManager';
 import { redisSessionManager } from './sessions/redisSessionManager';
 import { SCRoomSummary } from './shared/types/game_data';
 import { gameRoomManager } from './rooms/GameRoom';
+import activeConfig from './config/configLoader';
 
 
 const app = express();
@@ -16,10 +17,17 @@ const app = express();
 // JSON 요청 본문을 해석하기 위한 미들웨어 설정 (필수!)
 app.use(express.json());
 
+const CLIENT_URL = activeConfig.client.url;
+
 app.use(cors({
-  origin: 'http://localhost:5173',
+  origin: CLIENT_URL,
   credentials: true
 }));
+
+// ALB Health Check용 엔드포인트
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
+});
 
 // API 라우터 등록
 app.use('/api/users', userRoutes);
@@ -29,7 +37,7 @@ const httpServer = createServer(app);
 // 2. Socket.io 서버 초기화
 const io = new Server(httpServer, {
   cors: {
-    origin: 'http://localhost:5173',
+    origin: CLIENT_URL,
     methods: ['GET', 'POST'],
     credentials: true
   }
