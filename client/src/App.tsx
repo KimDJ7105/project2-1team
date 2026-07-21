@@ -5,6 +5,7 @@ import AuthPage from './pages/AuthPage';
 import { LobbyPage } from './pages/LobbyPage';
 import { getMeAPI, logoutAPI } from './api/auth';
 import { GamePage } from './pages/GamePage';
+import { WaitingRoomPage } from './pages/WaitingRoomPage';
 
 export default function App() {
   const [user, setUser] = useState<any>(null);
@@ -12,9 +13,36 @@ export default function App() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   // 현재 입장한 방 상태 관리 (null이면 로비, 객체가 있으면 게임방)
-  const [currentRoom, setCurrentRoom] = useState<{ roomId: string; roomTitle: string } | null>(null);
+  const [currentRoom, setCurrentRoom] = useState<{ 
+  roomId: string; 
+  roomTitle: string; 
+  players?: any[]; 
+  } | null>(() => {
+    const savedRoom = sessionStorage.getItem('currentRoom');
+    return savedRoom ? JSON.parse(savedRoom) : null;
+  });
 
-  const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8080';
+  // 게임 시작 여부 상태 관리 (false면 대기방, true면 본 게임 화면)
+  const [isPlaying, setIsPlaying] = useState<boolean>(() => {
+    const savedPlaying = sessionStorage.getItem('isPlaying');
+    return savedPlaying === 'true';
+  });
+
+  const API_BASE_URL = import.meta.env.VITE_SERVER_URL
+  // 방 상태나 게임 상태가 변경될 때마다 세션스토리지에 동기화
+  const handleRoomChange = (roomInfo: any) => {
+    setCurrentRoom(roomInfo);
+    if (roomInfo) {
+      sessionStorage.setItem('currentRoom', JSON.stringify(roomInfo));
+    } else {
+      sessionStorage.removeItem('currentRoom');
+    }
+  };
+
+  const handlePlayingChange = (playing: boolean) => {
+    setIsPlaying(playing);
+    sessionStorage.setItem('isPlaying', String(playing));
+  };
 
   // 1. 세션 복구 로직
   useEffect(() => {
@@ -38,6 +66,8 @@ export default function App() {
       } catch (error) {
         console.error('세션 복구 실패(만료되었거나 잘못된 토큰):', error);
         sessionStorage.removeItem('token');
+        sessionStorage.removeItem('currentRoom');
+        sessionStorage.removeItem('isPlaying');
       } finally {
         setIsLoading(false);
       }
@@ -116,7 +146,25 @@ export default function App() {
           socket={socket}
           user={user}
           onLogout={handleLogout}
-          onJoinSuccess={(roomInfo) => setCurrentRoom(roomInfo)}
+          onJoinSuccess={(roomInfo: { roomId: string; roomTitle: string; players?: any[] }) => {
+            handleRoomChange(roomInfo);
+            handlePlayingChange(false);
+          }}
+        />
+      ) : !isPlaying ? (
+        <WaitingRoomPage
+          socket={socket}
+          roomId={currentRoom.roomId}
+          roomTitle={currentRoom.roomTitle}
+          user={user}
+          initialPlayers={currentRoom.players || []}
+          onLeave={() => {
+            handleRoomChange(null);
+            handlePlayingChange(false);
+          }}
+          onStartGame={() => {
+            handlePlayingChange(true);
+          }}
         />
       ) : (
         <GamePage
@@ -124,7 +172,10 @@ export default function App() {
           roomId={currentRoom.roomId}
           roomTitle={currentRoom.roomTitle}
           user={user}
-          onLeave={() => setCurrentRoom(null)}
+          onLeave={() => {
+            handleRoomChange(null);
+            handlePlayingChange(false);
+          }}
         />
       )}
     </div>

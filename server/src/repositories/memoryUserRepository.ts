@@ -18,6 +18,14 @@ export class MemoryUserRepository implements UserRepository { // 인 메모리 M
     return null;
   }
 
+  // userId로 유저 검색
+async findById(userId: number): Promise<User | null> {
+
+  const user = this.users.get(userId);
+
+  return user ?? null;
+}
+
   // 회원 등록
   async signUp(userData: Omit<User, 'userId' | 'createdAt' | 'updatedAt'>): Promise<User> {
     const newUserId = this.idCounter++;

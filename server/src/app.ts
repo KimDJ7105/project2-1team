@@ -9,27 +9,35 @@ import { disconnectTimerManager } from './sessions/disconnectTimerManager';
 import { redisSessionManager } from './sessions/redisSessionManager';
 import { SCRoomSummary } from './shared/types/game_data';
 import { gameRoomManager } from './rooms/GameRoom';
-
+import profileRoutes from './routes/profileRoutes';
+import activeConfig from './config/configLoader';
 
 const app = express();
 
 // JSON 요청 본문을 해석하기 위한 미들웨어 설정 (필수!)
 app.use(express.json());
 
+const CLIENT_URL = activeConfig.client.url;
+
 app.use(cors({
-  origin: 'http://localhost:5173',
+  origin: CLIENT_URL,
   credentials: true
 }));
 
+// ALB Health Check용 엔드포인트
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
+});
+
 // API 라우터 등록
 app.use('/api/users', userRoutes);
-
+app.use('/api/profile', profileRoutes);
 const httpServer = createServer(app);
 
 // 2. Socket.io 서버 초기화
 const io = new Server(httpServer, {
   cors: {
-    origin: 'http://localhost:5173',
+    origin: CLIENT_URL,
     methods: ['GET', 'POST'],
     credentials: true
   }
@@ -63,8 +71,45 @@ io.on('connection', (socket: AuthenticatedSocket) => {
   });
 
   // 접속이 끊겼을 때
-  socket.on('disconnect', () => {
+  socket.on('disconnect', async () => {
     console.log(`[Server] 유저 ${userNickname} 님의 접속이 끊겼습니다. (소켓 ID: ${socket.id})`);
+
+    // 참여 중이던 방이 있는지 확인하고 퇴장 처리하여 유령 플레이어 방지
+    const allRooms = gameRoomManager.getAllRooms();
+    for (const room of allRooms) {
+      // Map의 values에서 현재 끊긴 소켓 ID나 이메일이 일치하는 유저가 있는지 확인
+      const player = Array.from(room.players.values()).find(
+        (p) => p.socketId === socket.id || (userEmail && p.email === userEmail)
+      );
+
+      if (player) {
+        console.log(`[Room] 접속 종료로 인한 방(${room.roomId}) 자동 퇴장 처리: ${player.nickname}`);
+        //leaveRoom 메서드가 내부적으로 소켓 ID를 대조해 플레이어를 제거하고, 0명이면 방을 삭제함
+        gameRoomManager.leaveRoom(room.roomId, player.socketId);
+        
+        // 남은 사람들에게 업데이트 알림
+        const remainingRoom = gameRoomManager.getRoom(room.roomId);
+        if (remainingRoom && remainingRoom.players.size > 0) {
+          io.to(room.roomId).emit('room:update', { players: Array.from(remainingRoom.players.values()) });
+          const updatedRoom = {
+            roomId: remainingRoom.roomId,
+            roomTitle: remainingRoom.roomTitle,
+            playerCount: remainingRoom.players.size,
+            status: remainingRoom.status
+          };
+          await redisSessionManager.saveRoom(room.roomId, updatedRoom);
+        } else {
+          // 남은 사람이 없으면 방 삭제
+          await redisSessionManager.deleteRoom(room.roomId);
+        }
+        
+        // 로비에 갱신된 방 목록 전송
+        const roomsData = await redisSessionManager.getAllRooms();
+        const roomList = roomsData.map((roomStr: string) => JSON.parse(roomStr));
+        io.emit('room:list', roomList);
+        break;
+      }
+    }
 
     if (!userEmail) return;
 
@@ -90,7 +135,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
   socket.on('room:list', async () => {
     try {
       // 1. Redis에서 'game_rooms' 해시의 모든 값을 가져옴
-      // hvals는 방 ID를 키로 가진 모든 JSON 데이터(방 정보)를 배열로 반환합니다.
+      // hvals는 방 ID를 키로 가진 모든 JSON 데이터(방 정보)를 배열로 반환
       const roomsData = await redisSessionManager.getAllRooms();
     
       // 2. 문자열 데이터를 객체(SCRoomSummary)로 변환
@@ -137,6 +182,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       roomId: roomId, 
       roomTitle: titleValue 
     });
+    io.to(roomId).emit('room:update', { players: Array.from(roomInstance.players.values()) });
 
     // Redis에 방 데이터 저장
     await redisSessionManager.saveRoom(roomId, newRoom);
@@ -192,6 +238,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
         roomId: roomInstance.roomId, 
         roomTitle: roomInstance.roomTitle 
       });
+      io.to(roomId).emit('room:update', { players: Array.from(roomInstance.players.values()) });
     
       // 6. 전체 로비 유저들에게 변경된 인원수 반영을 위해 방 목록 다시 전송
       const roomsData = await redisSessionManager.getAllRooms();
@@ -204,6 +251,93 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       socket.emit('room:join:fail', { message: '방 입장 처리 중 서버 오류가 발생했습니다.' });
     }
   });
+
+  // 준비 완료 이벤트 
+  socket.on('room:ready', ({ roomId }) => {
+    const room = gameRoomManager.getRoom(roomId);
+    if (!room) return;
+
+    // Map 구조의 값들을 배열로 변환하여 소켓 ID로 플레이어 검색
+    const playersArray = Array.from(room.players.values());
+    const player = playersArray.find(p => p.socketId === socket.id);
+    if (player) {
+      player.isReady = !player.isReady; // 준비 취소도 가능하도록 토글
+    }
+
+    // 방에 있는 모든 사람에게 현재 인원 및 준비 상태 브로드캐스트
+    io.to(roomId).emit('room:update', { players: Array.from(room.players.values()) });
+
+    // 2명이 모두 모였고, 2명 모두 준비 완료 상태인지 확인 (size와 every 사용)
+    const allReady = room.players.size === 2 && Array.from(room.players.values()).every(p => p.isReady);
+    if (allReady) {
+      // 게임 시작 상태로 변경 및 알림
+      room.status = 'playing';
+      
+      // 랜덤으로 선공 선택 
+      const firstPlayer = Math.random() < 0.5? Array.from(room.players.values())[0] : Array.from(room.players.values())[1];
+
+      io.to(roomId).emit('game:start', { 
+        roomId,
+        turn: firstPlayer?.socketId, // 첫 번째 입장한 사람(방장) 흑돌 선공
+        players: Array.from(room.players.values()) 
+      });
+    }
+  });
+
+  // 방 나가기(뒤로가기) 핸들러도 확인/추가
+  socket.on('room:leave', async ({ roomId }) => {
+    socket.leave(roomId);
+    gameRoomManager.leaveRoom(roomId, socket.id);
+    // 남은 사람들에게 인원 변경 알림
+    const room = gameRoomManager.getRoom(roomId);
+    if (room) {
+      io.to(roomId).emit('room:update', { players: Array.from(room.players.values()) });
+      
+      const updatedRoom = {
+        roomId: room.roomId,
+        roomTitle: room.roomTitle,
+        playerCount: room.players.size,
+        status: room.status
+      };
+      await redisSessionManager.saveRoom(roomId, updatedRoom);
+    } else {
+      // 남은 사람이 없어 방이 삭제된 경우 Redis에서도 제거
+      await redisSessionManager.deleteRoom(roomId);
+    }
+
+    // 로비에 있는 유저들에게 방 목록 갱신 전송
+    const roomsData = await redisSessionManager.getAllRooms();
+    const roomList = roomsData.map((roomStr: string) => JSON.parse(roomStr));
+    io.emit('room:list', roomList);
+  });
+
+  //방 정보 동기화 요청 
+  socket.on('room:get', ({ roomId }: { roomId: string }) => {
+    try {
+      const roomInstance = gameRoomManager.getRoom(roomId);
+      
+      // 방이 존재하지 않거나 플레이어 정보가 비어있는 경우
+      if (!roomInstance || roomInstance.players.size === 0) {
+        socket.emit('room:not_found', { message: '존재하지 않거나 삭제된 방입니다.' });
+        return;
+      }
+
+      if (userEmail && userNickname) {
+        // 새로고침으로 인해 바뀐 새로운 socket.id로 유저 정보를 갱신
+        roomInstance.addPlayer(userEmail, userNickname, socket.id);
+        socket.join(roomId);
+
+        // 방 전체에 갱신된 플레이어 목록 브로드캐스트
+        io.to(roomId).emit('room:update', { 
+          players: Array.from(roomInstance.players.values()) 
+        });
+        console.log(`[Room] ${userNickname} 님의 재접속(새로고침)으로 방(${roomId}) 소켓 ID를 갱신하고 동기화했습니다.`);
+      }
+    } catch (err) {
+      console.error('방 정보 조회 오류:', err);
+    }
+  });
+
 });
 
 // 데이터베이스 초기화 및 서버 구동을 위한 비동기 래퍼 함수

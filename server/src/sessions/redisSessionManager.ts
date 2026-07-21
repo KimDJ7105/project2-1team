@@ -94,6 +94,11 @@ export class RedisSessionManager implements ISessionManager {
   async saveRoom(roomId: string, roomData: Record<string, any>): Promise<void> {
     await this.redisClient.hset('game_rooms', roomId, JSON.stringify(roomData));
   }
+
+  // 방 삭제용
+  async deleteRoom(roomId: string): Promise<void> {
+    await this.redisClient.hdel('game_rooms', roomId);
+  }
 }
 
 //싱글톤

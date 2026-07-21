@@ -18,3 +18,6 @@ if (config.database.type === 'memory') {
 }
 
 export { userRepository };
+import { MysqlUserStateRepository } from './mysqlUserStateRepository';
+
+export const userStateRepository = new MysqlUserStateRepository();

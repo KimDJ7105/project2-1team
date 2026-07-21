@@ -1,6 +1,8 @@
 # server/src/config/application.yaml
 development:
   env: "dev" # 개발 환경
+  client:
+    url: ${CLIENT_URL:http://localhost:5173}
   database:
     type: "memory" # 로컬 개발 환경에서는 가상 메모리 저장소 작동
   redis:
@@ -10,6 +12,8 @@ development:
 
 production:
   env: "prod"
+  client:
+    url: ${CLIENT_URL:http://localhost:5173}
   database:
     type: "mysql"
     host: ${DB_HOST:127.0.0.1}
