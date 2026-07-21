@@ -157,7 +157,11 @@ export default function ProfileView({
 
       <div className="bottom-nav">
 
-        <div className="item">
+        <div
+          className="item"
+          onClick={onBackClick}
+          style={{ cursor: 'pointer' }}
+        >
           🏠
           <span>홈</span>
         </div>

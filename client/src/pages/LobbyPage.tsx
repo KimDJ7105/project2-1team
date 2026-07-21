@@ -7,6 +7,7 @@ import CreateRoomModal from '../components/Game/CreateRoomModal.tsx';
 import type { Socket } from 'socket.io-client';
 import type { Room } from '../hooks/useSocket';
 import ProfileView from '../components/Profile/ProfileView';
+import { getProfile } from '../api/profileApi';
 
 interface LobbyPageProps {
   socket: Socket | null;
@@ -66,6 +67,25 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout, on
       socket.off('room:join:fail', handleJoinFail);};
   }, [socket, requestRoomList, onJoinSuccess]);
 
+
+  //프로필 데이터 가져오는 useEffect
+  useEffect(() => {
+  const fetchProfile = async () => {
+    try {
+
+      const data = await getProfile(1);
+
+      setProfile(data);
+
+    } catch(error) {
+      console.error("프로필 조회 실패:", error);
+    }
+  };
+
+  fetchProfile();
+
+  }, []);
+  
   const handleCreateRoom = () => {
     setShowCreateModal(true);
   };
