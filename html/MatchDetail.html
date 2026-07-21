@@ -44,7 +44,7 @@
     display:flex;
     flex-direction:column;
   }
-  .pad{padding:18px 18px 0; display:flex; flex-direction:column; flex:1; min-height:0;}
+  .pad{padding:18px 18px 0; display:flex; flex-direction:column; flex:1; min-height:0; overflow-y:auto;}
   .row{display:flex; align-items:center; gap:10px;}
 
   .muted{color:var(--text-sub);}
@@ -58,7 +58,7 @@
 
   .matchup{
     display:flex; align-items:center; justify-content:center;
-    gap:18px; margin:16px 0 14px;
+    gap:18px; margin:16px 0 14px; flex-shrink:0;
   }
   .matchup .side{text-align:center;}
   .matchup .name{font-size:12px; font-weight:700; margin-top:6px;}
@@ -70,19 +70,24 @@
 
   .board-mini{
     position:relative;
-    height:180px; margin:0 4px 14px;
+    width:330px; height:330px; margin:0 auto 14px;
+    flex-shrink:0;
     border-radius:14px; overflow:hidden;
     background:linear-gradient(150deg,var(--wood-1),var(--wood-2));
     border:6px solid #d9ad6e;
   }
   .board-mini .grid-lines{
-    position:absolute; inset:6px;
+    position:absolute; inset:0;
     background-image:
       linear-gradient(var(--wood-line) 1.5px, transparent 1.5px),
       linear-gradient(90deg, var(--wood-line) 1.5px, transparent 1.5px);
     background-size:22px 22px; opacity:.5;
   }
-  .stone{position:absolute; width:16px;height:16px; border-radius:50%;}
+  .star-point{
+    position:absolute; width:5px; height:5px; border-radius:50%;
+    background:var(--wood-line); opacity:.55; transform:translate(-50%,-50%);
+  }
+  .stone{position:absolute; width:18px;height:18px; border-radius:50%; transform:translate(-50%,-50%);}
   .stone.b{background:radial-gradient(circle at 32% 26%, var(--stone-black-a), var(--stone-black-b) 72%); box-shadow:0 2px 3px #0006;}
   .stone.w{background:radial-gradient(circle at 32% 26%, #fff, var(--stone-white-b) 78%); box-shadow:0 2px 3px #0003;}
   .stone.aug::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:2px solid var(--teal);}
@@ -128,16 +133,27 @@
 
     <div class="board-mini">
       <div class="grid-lines"></div>
-      <div class="stone b" style="top:32%;left:34%;"></div>
-      <div class="stone w" style="top:42%;left:42%;"></div>
-      <div class="stone b" style="top:50%;left:50%;"></div>
-      <div class="stone w aug" style="top:58%;left:58%;"></div>
-      <div class="stone b" style="top:66%;left:66%;"></div>
+      <div class="star-point" style="top:165px; left:165px;"></div>
+      <div class="stone b" style="top:143px; left:121px;"></div>
+      <div class="stone w" style="top:143px; left:143px;"></div>
+      <div class="stone b" style="top:165px; left:143px;"></div>
+      <div class="stone w aug" style="top:165px; left:187px;"></div>
+      <div class="stone b" style="top:187px; left:165px;"></div>
     </div>
 
     <div class="list-item"><span class="muted">대국 시간</span><b>5분 전 · 43턴</b></div>
-    <div class="list-item"><span class="muted">사자가 쓴 증강</span><span>➕ 추가 착수</span></div>
-    <div class="list-item"><span class="muted">구름이 쓴 증강</span><span>✖️ 상대 돌 제거</span></div>
+    <div class="list-item" style="align-items:flex-start; flex-direction:column; gap:6px;">
+      <span class="muted">사자가 쓴 증강 (순서대로)</span>
+      <div style="font-size:13px; font-weight:700; line-height:1.6;">
+        1. 추가 착수 → 2. 한 턴 더 → 3. 상대 돌 제거
+      </div>
+    </div>
+    <div class="list-item" style="align-items:flex-start; flex-direction:column; gap:6px;">
+      <span class="muted">구름이 쓴 증강 (순서대로)</span>
+      <div style="font-size:13px; font-weight:700; line-height:1.6;">
+        1. 안개 시야 → 2. 돌 무르기 → 3. 랜덤 돌 생성
+      </div>
+    </div>
     <div class="list-item"><span class="muted">레이팅 변화</span><b style="color:var(--teal-dark);">1200 → 1210 (+10)</b></div>
 
     <div style="flex:1;"></div>
