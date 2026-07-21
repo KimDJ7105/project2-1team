@@ -54,8 +54,16 @@ export const WaitingRoomPage: React.FC<WaitingRoomPageProps> = ({
       onStartGame();
     };
 
+    // 방이 소멸되어 존재하지 않을 때 처리
+    const handleRoomNotFound = () => {
+      console.log('[방 소멸 감지] 방이 이미 삭제되어 로비로 이동합니다.');
+      onLeave();
+    };
+
+    //이벤트 리스너 등록 
     socket.on('room:update', handleRoomUpdate);
     socket.on('game:start', handleGameStart);
+    socket.on('room:not_found', handleRoomNotFound);
 
     // 컴포넌트가 마운트되거나 소켓이 (재)연결되었을 때 방 정보를 요청하여 복구
     socket.emit('room:get', { roomId });
@@ -63,8 +71,9 @@ export const WaitingRoomPage: React.FC<WaitingRoomPageProps> = ({
     return () => {
       socket.off('room:update', handleRoomUpdate);
       socket.off('game:start', handleGameStart);
+      socket.off('room:not_found', handleRoomNotFound);
     };
-  }, [socket, user, roomId]);
+  }, [socket, user, roomId, onLeave]);
 
   const handleReadyClick = () => {
     if (!socket) return;

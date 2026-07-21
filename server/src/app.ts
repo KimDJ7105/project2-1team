@@ -307,12 +307,19 @@ io.on('connection', (socket: AuthenticatedSocket) => {
   socket.on('room:get', ({ roomId }: { roomId: string }) => {
     try {
       const roomInstance = gameRoomManager.getRoom(roomId);
-      if (roomInstance && userEmail && userNickname) {
+      
+      // 방이 존재하지 않거나 플레이어 정보가 비어있는 경우
+      if (!roomInstance || roomInstance.players.size === 0) {
+        socket.emit('room:not_found', { message: '존재하지 않거나 삭제된 방입니다.' });
+        return;
+      }
+
+      if (userEmail && userNickname) {
         // 새로고침으로 인해 바뀐 새로운 socket.id로 유저 정보를 갱신
         roomInstance.addPlayer(userEmail, userNickname, socket.id);
         socket.join(roomId);
 
-        // 방 전체에 갱신된 플레이어 목록(새 소켓 ID 반영)을 브로드캐스트
+        // 방 전체에 갱신된 플레이어 목록 브로드캐스트
         io.to(roomId).emit('room:update', { 
           players: Array.from(roomInstance.players.values()) 
         });
