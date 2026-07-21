@@ -17,11 +17,33 @@ export default function App() {
   roomId: string; 
   roomTitle: string; 
   players?: any[]; 
-} | null>(null);
+  } | null>(() => {
+    const savedRoom = sessionStorage.getItem('currentRoom');
+    return savedRoom ? JSON.parse(savedRoom) : null;
+  });
+
   // 게임 시작 여부 상태 관리 (false면 대기방, true면 본 게임 화면)
-  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [isPlaying, setIsPlaying] = useState<boolean>(() => {
+    const savedPlaying = sessionStorage.getItem('isPlaying');
+    return savedPlaying === 'true';
+  });
 
   const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8080';
+
+  // 방 상태나 게임 상태가 변경될 때마다 세션스토리지에 동기화
+  const handleRoomChange = (roomInfo: any) => {
+    setCurrentRoom(roomInfo);
+    if (roomInfo) {
+      sessionStorage.setItem('currentRoom', JSON.stringify(roomInfo));
+    } else {
+      sessionStorage.removeItem('currentRoom');
+    }
+  };
+
+  const handlePlayingChange = (playing: boolean) => {
+    setIsPlaying(playing);
+    sessionStorage.setItem('isPlaying', String(playing));
+  };
 
   // 1. 세션 복구 로직
   useEffect(() => {
@@ -45,6 +67,8 @@ export default function App() {
       } catch (error) {
         console.error('세션 복구 실패(만료되었거나 잘못된 토큰):', error);
         sessionStorage.removeItem('token');
+        sessionStorage.removeItem('currentRoom');
+        sessionStorage.removeItem('isPlaying');
       } finally {
         setIsLoading(false);
       }
@@ -124,8 +148,8 @@ export default function App() {
           user={user}
           onLogout={handleLogout}
           onJoinSuccess={(roomInfo: { roomId: string; roomTitle: string; players?: any[] }) => {
-            setCurrentRoom(roomInfo);
-            setIsPlaying(false);
+            handleRoomChange(roomInfo);
+            handlePlayingChange(false);
           }}
         />
       ) : !isPlaying ? (
@@ -136,11 +160,11 @@ export default function App() {
           user={user}
           initialPlayers={currentRoom.players || []}
           onLeave={() => {
-            setCurrentRoom(null);
-            setIsPlaying(false);
+            handleRoomChange(null);
+            handlePlayingChange(false);
           }}
           onStartGame={() => {
-            setIsPlaying(true);
+            handlePlayingChange(true);
           }}
         />
       ) : (
@@ -150,8 +174,8 @@ export default function App() {
           roomTitle={currentRoom.roomTitle}
           user={user}
           onLeave={() => {
-            setCurrentRoom(null);
-            setIsPlaying(false);
+            handleRoomChange(null);
+            handlePlayingChange(false);
           }}
         />
       )}
