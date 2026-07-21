@@ -58,7 +58,7 @@ export interface SCRoomSummary {
   roomId: string;   // 방 ID
   roomTitle: string;    // 방제
   playerCount: number; // 플레이어 수, 1 또는 2
-  status: 'waiting' | 'playing'; // 방 상태
+  status: 'waiting' | 'playing' | 'finished'; // 방 상태
 }
 
 // 로비 방 목록 실시간 업데이트 데이터

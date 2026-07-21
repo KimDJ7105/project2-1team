@@ -105,7 +105,9 @@ io.on('connection', (socket: AuthenticatedSocket) => {
         
         // 로비에 갱신된 방 목록 전송
         const roomsData = await redisSessionManager.getAllRooms();
-        const roomList = roomsData.map((roomStr: string) => JSON.parse(roomStr));
+        const roomList: SCRoomSummary[] = roomsData
+          .map((roomStr: string) => JSON.parse(roomStr) as SCRoomSummary)
+          .filter((r) => r.status !== 'finished');
         io.emit('room:list', roomList);
         break;
       }
@@ -139,7 +141,9 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       const roomsData = await redisSessionManager.getAllRooms();
     
       // 2. 문자열 데이터를 객체(SCRoomSummary)로 변환
-      const roomList: SCRoomSummary[] = roomsData.map((data: string) => JSON.parse(data) as SCRoomSummary);
+      const roomList: SCRoomSummary[] = roomsData
+        .map((data: string) => JSON.parse(data) as SCRoomSummary)
+        .filter((room) => room.status !== 'finished');
     
       // 3. 클라이언트에 전송
       socket.emit('room:list', roomList);
@@ -189,7 +193,9 @@ io.on('connection', (socket: AuthenticatedSocket) => {
 
     // 전체 방 목록을 다시 조회하여 접속 중인 모든 클라이언트에게 갱신된 목록 전송
     const roomsData = await redisSessionManager.getAllRooms();
-    const roomList = roomsData.map((roomStr: string) => JSON.parse(roomStr));
+    const roomList : SCRoomSummary[] = roomsData
+      .map((roomStr: string) => JSON.parse(roomStr) as SCRoomSummary)
+      .filter((r) => r.status !== 'finished');
 
     io.emit('room:list', roomList);
     } catch (err) {
@@ -242,7 +248,9 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     
       // 6. 전체 로비 유저들에게 변경된 인원수 반영을 위해 방 목록 다시 전송
       const roomsData = await redisSessionManager.getAllRooms();
-      const roomList = roomsData.map((roomStr: string) => JSON.parse(roomStr));
+      const roomList: SCRoomSummary[] = roomsData
+        .map((roomStr: string) => JSON.parse(roomStr) as SCRoomSummary)
+        .filter((r) => r.status !== 'finished');
       io.emit('room:list', roomList);
 
       console.log(`[Room] ${userNickname}(${userEmail}) 님이 방(${roomId})에 입장했습니다.`);
@@ -306,7 +314,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
   // 방 나가기(뒤로가기) 핸들러도 확인/추가
   socket.on('room:leave', async ({ roomId }) => {
     socket.leave(roomId);
-    gameRoomManager.leaveRoom(roomId, socket.id);
+    gameRoomManager.leaveRoom(roomId, userEmail || socket.id);
     // 남은 사람들에게 인원 변경 알림
     const room = gameRoomManager.getRoom(roomId);
     if (room) {
@@ -326,7 +334,9 @@ io.on('connection', (socket: AuthenticatedSocket) => {
 
     // 로비에 있는 유저들에게 방 목록 갱신 전송
     const roomsData = await redisSessionManager.getAllRooms();
-    const roomList = roomsData.map((roomStr: string) => JSON.parse(roomStr));
+    const roomList: SCRoomSummary[] = roomsData
+      .map((roomStr: string) => JSON.parse(roomStr) as SCRoomSummary)
+      .filter((r) => r.status !== 'finished');
     io.emit('room:list', roomList);
   });
 
@@ -384,7 +394,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
   });
 
   // 착수 요청 이벤트 핸들러
-  socket.on('game:put_stone', ({ roomId, x, y }: { roomId: string; x: number; y: number }) => {
+  socket.on('game:put_stone', async ({ roomId, x, y }: { roomId: string; x: number; y: number }) => {
     try {
       if (!userEmail) {
         socket.emit('game:error', { message: '인증되지 않은 사용자입니다.' });
@@ -419,11 +429,28 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       // 승리 조건이 달성된 경우 게임 종료 이벤트 발송
       if (result.isWin) {
         const winner = Array.from(room.players.values()).find(p => p.color === result.color);
+        // Redis에 방 상태를 'finished'로 갱신하여 저장
+        const updatedRoom = {
+          roomId: room.roomId,
+          roomTitle: room.roomTitle,
+          playerCount: room.players.size,
+          status: 'finished'
+        };
+        await redisSessionManager.saveRoom(roomId, updatedRoom);
+
         io.to(roomId).emit('game:over', {
           winner: result.color,
           winnerNickname: winner?.nickname || '알 수 없음',
           message: `${winner?.nickname || result.color} 님이 5목을 완성하여 승리했습니다!`
         });
+
+        // 로비에 있는 전체 유저들에게 종료된 방이 제외된 목록 전송
+        const roomsData = await redisSessionManager.getAllRooms();
+        const roomList = roomsData
+          .map((roomStr: string) => JSON.parse(roomStr) as SCRoomSummary)
+          .filter((r) => r.status !== 'finished');
+        
+        io.emit('room:list', roomList);
       }
     } catch (err) {
       console.error('착수 처리 중 오류:', err);

@@ -168,15 +168,17 @@ class GameRoomManager {
 
   // 룸 인스턴스 삭제
   public deleteRoom(roomId: string): void {
+    console.log("방 삭제, ID : ", roomId);
     this.rooms.delete(roomId);
   }
 
-  public leaveRoom(roomId: string, socketId: string): void {
+  public leaveRoom(roomId: string, identifier: string): void {
     const room = this.getRoom(roomId);
     if (!room) return;
-
+    
+    // socketId뿐만 아니라 맵의 key인 userEmail로도 대조하여 확실하게 플레이어 제거
     for (const [email, player] of room.players.entries()) {
-      if (player.socketId === socketId) {
+      if (player.socketId === identifier || email === identifier) {
         room.removePlayer(email);
         break;
       }
