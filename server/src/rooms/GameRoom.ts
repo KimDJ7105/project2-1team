@@ -15,6 +15,7 @@ export class GameRoom {
   public board: string[][]; // 15x15 오목판 (빈칸: "", "black", "white")
   public currentTurn: 'black' | 'white' = 'black';
   public status: 'waiting' | 'playing' | 'finished' = 'waiting';
+  public turnCount: number = 1;
 
   constructor(roomId: string, roomTitle: string) {
     this.roomId = roomId;
@@ -61,8 +62,89 @@ export class GameRoom {
     this.board = Array(15).fill(null).map(() => Array(15).fill(''));
     this.currentTurn = 'black';
     this.status = 'waiting';
+    this.turnCount = 1;
+  }
+
+  // 착수 검증 및 처리 메서드
+  public putStone(email: string, x: number, y: number): { success: boolean; message?: string; isWin?: boolean; color?: 'black' | 'white' } {
+    if (this.status !== 'playing') {
+      return { success: false, message: '진행 중인 게임이 아닙니다.' };
+    }
+
+    const player = this.players.get(email);
+    if (!player) {
+      return { success: false, message: '방에 참여한 플레이어가 아닙니다.' };
+    }
+
+    if (player.color !== this.currentTurn) {
+      return { success: false, message: '현재 본인의 차례가 아닙니다.' };
+    }
+
+    if (x < 0 || x > 14 || y < 0 || y > 14) {
+      return { success: false, message: '바둑판 영역을 벗어난 좌표입니다.' };
+    }
+
+    if (this.board[y][x] !== '') {
+      return { success: false, message: '이미 돌이 놓여 있는 자리입니다.' };
+    }
+
+    // 바둑판에 돌 배치
+    this.board[y][x] = this.currentTurn;
+
+    // 승리 조건 검사
+    const isWin = this.checkWin(x, y, this.currentTurn);
+    if (isWin) {
+      this.status = 'finished';
+      return { success: true, isWin: true, color: this.currentTurn };
+    }
+
+    // 다음 턴으로 교체 및 턴 수 증가
+    this.currentTurn = this.currentTurn === 'black' ? 'white' : 'black';
+    this.turnCount += 1;
+
+    return { success: true, isWin: false, color: player.color };
+  }
+
+  // 4방향 5목 판정 알고리즘
+  private checkWin(x: number, y: number, color: string): boolean {
+    const directions = [
+      [1, 0],   // 가로
+      [0, 1],   // 세로
+      [1, 1],   // 우하향 대각선
+      [1, -1]   // 우상향 대각선
+    ];
+
+    for (const [dx, dy] of directions) {
+      let count = 1; // 방금 놓은 돌 포함
+
+      // 정방향 탐색
+      let nx = x + dx;
+      let ny = y + dy;
+      while (nx >= 0 && nx <= 14 && ny >= 0 && ny <= 14 && this.board[ny][nx] === color) {
+        count++;
+        nx += dx;
+        ny += dy;
+      }
+
+      // 역방향 탐색
+      nx = x - dx;
+      ny = y - dy;
+      while (nx >= 0 && nx <= 14 && ny >= 0 && ny <= 14 && this.board[ny][nx] === color) {
+        count++;
+        nx -= dx;
+        ny -= dy;
+      }
+
+      // 연속된 돌이 5개 이상이면 승리
+      if (count >= 5) {
+        return true;
+      }
+    }
+
+    return false;
   }
 }
+
 
 class GameRoomManager {
   private rooms: Map<string, GameRoom> = new Map();
