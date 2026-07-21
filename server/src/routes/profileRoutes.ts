@@ -1,5 +1,3 @@
-// server/src/routes/profileRoutes.ts
-
 import { Router } from 'express';
 import { profileController } from '../controllers/profileController';
 
@@ -10,6 +8,13 @@ const router = Router();
 router.get(
   '/',
   profileController.getProfile
+);
+
+
+// 닉네임 변경
+router.put(
+  '/nickname',
+  profileController.updateNickname
 );
 
 

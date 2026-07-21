@@ -67,6 +67,39 @@ export class ProfileService {
     };
 
   }
+   async updateNickname(
+    userId: number,
+    nickname: string
+  ) {
+
+    if (!nickname) {
+      throw new Error('NICKNAME_REQUIRED');
+    }
+
+
+    const user =
+      await userRepository.findById(userId);
+
+
+    if (!user) {
+      throw new Error('USER_NOT_FOUND');
+    }
+
+
+    const updatedUser =
+      await userRepository.update(
+        userId,
+        {
+          nickname
+        }
+      );
+
+
+    return {
+      nickname: updatedUser.nickname
+    };
+
+  }
 
 }
 

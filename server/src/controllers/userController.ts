@@ -65,6 +65,7 @@ export class UserController {
       const sessionId = await redisSessionManager.createSession(
         user.email,
         { 
+          userId: user.userId,
           email: user.email, 
           nickname: user.nickname 
         },
@@ -127,6 +128,7 @@ export class UserController {
       // 세션에 저장되어 있던 유저 정보 반환
       res.status(200).json({
         user: {
+          userId: sessionData.userId,
           email: sessionData.email,
           nickname: sessionData.nickname
         }

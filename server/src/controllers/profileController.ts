@@ -29,6 +29,39 @@ export class ProfileController {
     }
 
   }
+// 낙네임 변경
+ async updateNickname(req: Request, res: Response) {
+
+    try {
+
+      const {
+        userId,
+        nickname
+      } = req.body;
+
+
+      const result =
+        await profileService.updateNickname(
+          Number(userId),
+          nickname
+        );
+
+
+      res.status(200).json(result);
+
+
+    } catch (error: any) {
+
+      res.status(400).json({
+        message: error.message
+      });
+
+    }
+
+  }
+
+
+
 
 
 }

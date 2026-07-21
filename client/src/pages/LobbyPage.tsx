@@ -8,11 +8,15 @@ import type { Socket } from 'socket.io-client';
 import type { Room } from '../hooks/useSocket';
 import ProfileView from '../components/Profile/ProfileView';
 import ProfileEditView from '../components/Profile/ProfileEdit';
-import { getProfile } from '../api/profileApi';
+import { getProfile,updateNickname } from '../api/profileApi';
 
 interface LobbyPageProps {
   socket: Socket | null;
-  user: { nickname: string; email: string };
+  user: {
+    userId: number;
+    nickname: string;
+    email: string;
+  };
   onLogout: () => void;
   onJoinSuccess: (roomInfo: { roomId: string; roomTitle: string }) => void;
 }
@@ -74,7 +78,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout, on
   const fetchProfile = async () => {
     try {
 
-      const data = await getProfile(1);
+      const data = await getProfile(user.userId);
 
       setProfile(data);
 
@@ -85,7 +89,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout, on
 
   fetchProfile();
 
-  }, []);
+  }, [user.userId]);
 
   const handleCreateRoom = () => {
     setShowCreateModal(true);
@@ -104,18 +108,47 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout, on
   
     if (showProfileEdit) {
   return (
-    <ProfileEditView
-      nickname={profile.nickname}
-      onBackClick={() => setShowProfileEdit(false)}
-      onSave={(newNickname:string) => {
-        setProfile({
-          ...profile,
-          nickname: newNickname
-        });
+   <ProfileEditView
+  nickname={profile.nickname}
 
-        setShowProfileEdit(false);
-      }}
-    />
+  onBackClick={() =>
+    setShowProfileEdit(false)
+  }
+
+
+  onSave={async(newNickname)=>{
+
+  try {
+
+    await updateNickname(
+      user.userId,
+      newNickname
+    );
+
+
+    setProfile({
+      ...profile,
+      nickname:newNickname
+    });
+
+
+    setShowProfileEdit(false);
+
+
+  } catch(error){
+
+    console.error(
+      "닉네임 변경 실패",
+      error
+    );
+
+  }
+
+}}
+
+/>
+
+
   );
 }
 
