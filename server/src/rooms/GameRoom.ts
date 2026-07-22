@@ -10,6 +10,7 @@ export interface Player {
   color: 'black' | 'white';
   isReady: boolean;
   augments: IAugment[];
+  activeEffects: { id: string; turnsRemaining: number }[];
 }
 
 export class GameRoom {
@@ -53,7 +54,8 @@ export class GameRoom {
       socketId,
       color,
       isReady: false,
-      augments: []
+      augments: [],
+      activeEffects : []
     });
 
     return true;
@@ -108,6 +110,8 @@ export class GameRoom {
     // 다음 턴으로 교체 및 턴 수 증가
     this.currentTurn = this.currentTurn === 'black' ? 'white' : 'black';
     this.turnCount += 1;
+
+    this.tickEffects(player.email);
 
     return { success: true, isWin: false, color: player.color };
   }
@@ -171,6 +175,19 @@ export class GameRoom {
         options: selectedOptions,
       });
     }
+  }
+
+  // 턴이 종료될 때 해당 플레이어의 지속 효과 턴 수를 차감, 만료된 효과를 제거
+  public tickEffects(email: string): void {
+    const player = this.players.get(email);
+    if (!player || !player.activeEffects) return;
+
+    player.activeEffects = player.activeEffects
+      .map((effect) => ({
+        ...effect,
+        turnsRemaining: effect.turnsRemaining - 1,
+      }))
+      .filter((effect) => effect.turnsRemaining > 0);
   }
 }
 
