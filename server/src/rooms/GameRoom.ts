@@ -1,6 +1,6 @@
 // server/src/rooms/GameRoom.ts
 
-import { AUGMENT_LIST } from '../shared/data/augments';
+import { AUGMENT_LIST, IAugment } from '../shared/data/augments';
 
 export interface Player {
   email: string;
@@ -8,7 +8,7 @@ export interface Player {
   socketId: string;
   color: 'black' | 'white';
   isReady: boolean;
-  augments: string[];
+  augments: IAugment[];
 }
 
 export class GameRoom {
@@ -155,9 +155,9 @@ export class GameRoom {
     for (const player of this.players.values()) {
       this.pendingAugmentPlayers.add(player.email);
 
-      // 본인이 이미 가진 증강은 제외
+      // 본인이 이미 가진 증강은 객체의 id를 기준으로 비교하여 제외
       const availableAugments = AUGMENT_LIST.filter(
-        (aug) => !player.augments.includes(aug.id)
+        (aug) => !player.augments.some((pAug) => pAug.id === aug.id)
       );
 
       // 무작위로 섞어서 3개 추출

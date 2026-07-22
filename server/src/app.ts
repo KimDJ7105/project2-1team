@@ -14,6 +14,7 @@ import profileRoutes from './routes/profileRoutes';
 import activeConfig from './config/configLoader';
 import { userStateRepositoryImpl } from './repositories/mysqlUserStateRepository';
 import { userRepository, userStateRepository } from './repositories';
+import { AUGMENT_MAP } from './shared/data/augments';
 const app = express();
 
 // JSON 요청 본문을 해석하기 위한 미들웨어 설정 (필수!)
@@ -501,10 +502,8 @@ io.on('connection', (socket: AuthenticatedSocket) => {
 
       const player = room.players.get(userEmail);
       if (player) {
-        // 중복 획득 방지 후 추가
-        if (!player.augments.includes(augmentId)) {
-          player.augments.push(augmentId);
-        }
+        // 클라이언트가 보낸 ID로 전체 증강 객체 데이터 조회
+        const augmentData = AUGMENT_MAP.get(augmentId);
         // 대기 명단에서 제외
         room.pendingAugmentPlayers.delete(userEmail);
         console.log(`[Augment] ${player.nickname} 증강 획득: ${augmentId}`);
