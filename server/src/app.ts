@@ -557,7 +557,10 @@ io.on('connection', (socket: AuthenticatedSocket) => {
         const augmentData = AUGMENT_MAP.get(augmentId);
         // 중복 획득 방지 후 전체 객체 상태로 추가
         if (augmentData && !player.augments.some((a) => a.id === augmentId)) {
-          player.augments.push(augmentData);
+          player.augments.push({ // 얕은 복사 실시 
+            ...augmentData,
+            isUsed: false // 초기 사용 여부 설정
+          });
         }
 
         // 대기 명단에서 제외
@@ -905,9 +908,12 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       }
 
       // 사용 완료된 증강은 소모 처리 필요. 
-      const targetAugment = player.augments.find((a) => a.id === augmentId);
+      const targetAugment = player.augments.find((a) => a.id === augmentId && !a.isUsed);
       if (targetAugment) {
         targetAugment.isUsed = true;
+      } else {
+        socket.emit('game:error', { message: '이미 사용했거나 보유하지 않은 증강입니다.' });
+        return;
       }
 
       // 갱신된 보드와 플레이어 상태를 방 전체에 동기화
