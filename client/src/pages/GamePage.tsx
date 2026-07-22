@@ -287,7 +287,8 @@ export const GamePage: React.FC<GamePageProps> = ({
   };
 
   const nextAugmentTurn = turnCount <= 15 ? 15 : 30;
-  const progressPercent = Math.min(100, ((turnCount % 15) / 15) * 100);
+  // 30턴을 초과할 경우 게이지가 100%로 고정되도록 제한
+  const progressPercent = turnCount >= 30 ? 100 : Math.min(100, ((turnCount % 15) / 15) * 100);
 
   const getStarPos = (gridPos: number) => `${14 + gridPos * 22}px`;
 
@@ -323,7 +324,7 @@ export const GamePage: React.FC<GamePageProps> = ({
         <div className="gauge-wrap">
           <div className="gauge-label">
             <span>📍 다음 증강 선택까지</span>
-            <span><strong style={{ color: 'var(--teal-dark)' }}>{turnCount}</strong> / {nextAugmentTurn}턴</span>
+            <span><strong style={{ color: 'var(--teal-dark)' }}>{Math.min(turnCount, 30)}</strong> / {nextAugmentTurn}턴</span>
           </div>
           <div className="gauge-track">
             <div className="gauge-fill" style={{ width: `${progressPercent}%` }}></div>
@@ -429,12 +430,22 @@ export const GamePage: React.FC<GamePageProps> = ({
             <span className="game-muted">총 턴 수</span>
             <b>{turnCount}턴</b>
           </div>
-          {/* 획득 포인트 제거 후 대신 들어갈 '사용한 증강' 영역 */}
           <div className="list-item" style={{ alignItems: 'flex-start', flexDirection: 'column', gap: '6px' }}>
             <span className="game-muted">사용한 증강</span>
-            <div style={{ fontSize: '13px', fontWeight: 700, lineHeight: '1.6', color: 'var(--text-main)' }}>
-              {/* 추후 증강 기능 구현 시 배열을 매핑할 자리 */}
-              선택한 증강 없음 (기본 모드)
+            <div style={{ fontSize: '13px', fontWeight: 700, lineHeight: '1.6', color: 'var(--text-main)', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              {myAugments && myAugments.length > 0 ? (
+                myAugments.map((aug, idx) => {
+                  const icon = typeof aug === 'object' ? (aug.icon || augmentIconMap[aug.id] || '🃏') : (augmentIconMap[aug] || '🃏');
+                  const name = typeof aug === 'object' ? aug.name : aug;
+                  return (
+                    <span key={idx} style={{ background: '#f0dfc0', padding: '2px 8px', borderRadius: '6px' }}>
+                      {icon} {name}
+                    </span>
+                  );
+                })
+              ) : (
+                '선택한 증강 없음 (기본 모드)'
+              )}
             </div>
           </div>
 

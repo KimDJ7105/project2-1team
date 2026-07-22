@@ -446,52 +446,6 @@ io.on('connection', (socket: AuthenticatedSocket) => {
         const winner = Array.from(room.players.values()).find(p => p.color === result.color);
         const loser = Array.from(room.players.values()).find(p => p.color !== result.color);
 
-        // GameRecord 저장용 유저 ID 조회
-
-const blackPlayer =
-  Array.from(room.players.values())
-    .find(p => p.color === 'black');
-
-const whitePlayer =
-  Array.from(room.players.values())
-    .find(p => p.color === 'white');
-
-
-const blackUser =
-  await userRepository.findByEmail(
-    blackPlayer!.email
-  );
-
-
-const whiteUser =
-  await userRepository.findByEmail(
-    whitePlayer!.email
-  );
-
-
-const winnerUser =
-  await userRepository.findByEmail(
-    winner!.email
-  );
-
-
-// 대국 기록 DB 저장
-await gameRecordRepositoryImpl.saveGameRecord({
-
-  blackUserId: blackUser!.userId,
-
-  whiteUserId: whiteUser!.userId,
-
-  winnerUserId: winnerUser!.userId,
-
-  boardState: room.board,
-
-  endReason: "WIN",
-
-  totalTurn: room.turnCount
-
-});
-
         // Redis에 방 상태를 'finished'로 갱신하여 저장
         const updatedRoom = {
           roomId: room.roomId,
@@ -501,32 +455,50 @@ await gameRecordRepositoryImpl.saveGameRecord({
         };
         await redisSessionManager.saveRoom(roomId, updatedRoom);
 
+        // 클라이언트에 결과 화면 출력 명령
         io.to(roomId).emit('game:over', {
           winner: result.color,
           winnerNickname: winner?.nickname || '알 수 없음',
           message: `${winner?.nickname || result.color} 님이 5목을 완성하여 승리했습니다!`
         });
 
+        //DB 관련 작업 
+        try {
+          const blackPlayer = Array.from(room.players.values()).find(p => p.color === 'black');
+          const whitePlayer = Array.from(room.players.values()).find(p => p.color === 'white');
 
+          if (blackPlayer && whitePlayer && winner) {
+            const [blackUser, whiteUser, winnerUser] = await Promise.all([
+              userRepository.findByEmail(blackPlayer.email),
+              userRepository.findByEmail(whitePlayer.email),
+              userRepository.findByEmail(winner.email)
+            ]);
 
-           // 승자/패자 전적 및 레이팅 DB 반영
-  try {
-    if (winner?.email) {
-      const winnerUser = await userRepository.findByEmail(winner.email);
-      if (winnerUser) {
-        await userStateRepositoryImpl.applyGameResult(winnerUser.userId, 'win', 10);
-      }
-    }
-    if (loser?.email) {
-      const loserUser = await userRepository.findByEmail(loser.email);
-      if (loserUser) {
-        await userStateRepositoryImpl.applyGameResult(loserUser.userId, 'lose', -10);
-      }
-    }
-    console.log(`[전적 반영 완료] 승자: ${winner?.nickname}, 패자: ${loser?.nickname}`);
-  } catch (err) {
-    console.error('전적 반영 중 오류:', err);
-  }
+            if (blackUser && whiteUser && winnerUser) {
+              await gameRecordRepositoryImpl.saveGameRecord({
+                blackUserId: blackUser.userId,
+                whiteUserId: whiteUser.userId,
+                winnerUserId: winnerUser.userId,
+                boardState: room.board,
+                endReason: "WIN",
+                totalTurn: room.turnCount
+              });
+            }
+
+            if (winnerUser) {
+              await userStateRepositoryImpl.applyGameResult(winnerUser.userId, 'win', 10);
+            }
+            if (loser) {
+              const loserUser = await userRepository.findByEmail(loser.email);
+              if (loserUser) {
+                await userStateRepositoryImpl.applyGameResult(loserUser.userId, 'lose', -10);
+              }
+            }
+            console.log(`[전적 및 대국 기록 저장 완료] 승자: ${winner?.nickname}, 패자: ${loser?.nickname}`);
+          }
+        } catch (err) {
+          console.error('대국 기록 또는 전적 반영 중 오류:', err);
+        }
 
         // 로비에 있는 전체 유저들에게 종료된 방이 제외된 목록 전송
         const roomsData = await redisSessionManager.getAllRooms();
