@@ -37,6 +37,17 @@ export class UserService {
   async login(email: string, password: string): Promise<Omit<User, 'password'>> {
     // 가입된 이메일인지 검증
     const user = await userRepository.findByEmail(email);
+    // 디버깅: 사용자 존재 여부 및 비밀번호 형태(길이, bcrypt 접두사) 확인
+    const found = !!user;
+    console.log(`[Auth Debug] found: ${found}`);
+    console.log(`[Auth Debug] inputPasswordLength: ${password ? password.length : 0}`);
+    if (user && user.password) {
+      const dbPwd = user.password;
+      console.log(`[Auth Debug] dbPasswordLength: ${dbPwd.length}, dbStartsWith$2: ${dbPwd.startsWith('$2')}`);
+    } else {
+      console.log('[Auth Debug] dbPasswordLength: 0, dbStartsWith$2: false');
+    }
+
     if (!user) {
       throw new Error('이메일 혹은 비밀번호를 확인해 주세요.');
     }
@@ -48,6 +59,7 @@ export class UserService {
 
     // 입력된 비밀번호와 해싱된 비밀번호 일치 여부 대조
     const isPasswordMatch = await bcrypt.compare(password, user.password);
+    console.log(`[Auth Debug] bcryptCompare: ${isPasswordMatch}`);
     if (!isPasswordMatch) {
       throw new Error('이메일 혹은 비밀번호를 확인해 주세요.');
     }

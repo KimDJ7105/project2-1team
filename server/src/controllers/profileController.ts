@@ -18,6 +18,16 @@ export class ProfileController {
       const profile =
         await profileService.getProfile(Number(userId));
 
+      // If profileImage is present (S3 object key), generate a presigned GET URL
+      if (profile && profile.profileImage) {
+        const command = new GetObjectCommand({
+          Bucket: process.env.S3_PROFILE_BUCKET,
+          Key: profile.profileImage,
+        });
+
+        const url = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+        profile.profileImage = url;
+      }
 
       res.status(200).json(profile);
 

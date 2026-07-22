@@ -2,6 +2,7 @@
 
 import '../../assets/styles/ProfileStyles.css';
 import { BottomNav } from '../Game/BottomNav';
+import { useState } from 'react';
 
 interface ProfileData {
   nickname: string;
@@ -29,6 +30,23 @@ export default function ProfileView({
 }: ProfileViewProps) {
 
 
+  function ProfileImage({ src, alt }: { src: string; alt?: string }) {
+    const [error, setError] = useState(false);
+
+    if (error) {
+      return <div className="profile-avatar-view__fallback">🦁</div>;
+    }
+
+    return (
+      <img
+        className="profile-avatar-view__image"
+        src={src}
+        alt={alt}
+        onError={() => setError(true)}
+      />
+    );
+  }
+
   return (
     <div className="phone">
       <div className="pad">
@@ -44,18 +62,14 @@ export default function ProfileView({
         </div>
 
         <div style={{ textAlign: 'center', margin: '16px 0 6px' }}>
-          <div
-            className="avatar lg"
-            style={{ margin: '0 auto 8px' }}
-          >
-            {
-              profile.profileImage
-                ? <img
-                    src={profile.profileImage}
-                    alt="프로필"
-                  />
-                : '🦁'
-            }
+          <div style={{ margin: '0 auto 8px' }}>
+            <div className="profile-avatar-view">
+              {
+                profile.profileImage
+                  ? <ProfileImage src={profile.profileImage} alt="프로필" />
+                  : <div className="profile-avatar-view__fallback">🦁</div>
+              }
+            </div>
           </div>
 
           <b>{profile.nickname}</b>
