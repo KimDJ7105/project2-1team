@@ -28,7 +28,6 @@ export default function ProfileView({
   onHistoryClick,
 }: ProfileViewProps) {
 
-  const level = 12; // 추후 레벨 시스템 추가 시 API 데이터로 변경
 
   return (
     <div className="phone">
@@ -60,18 +59,12 @@ export default function ProfileView({
           </div>
 
           <b>{profile.nickname}</b>
-
-          <br />
-
-          <span className="badge">
-            Lv.{level}
-          </span>
         </div>
 
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
+            gridTemplateColumns: '1fr 1fr 1fr',
             gap: 8,
             marginTop: 14
           }}
@@ -93,10 +86,7 @@ export default function ProfileView({
             </b>
           </div>
 
-          <div className="list-item">
-            <span className="muted" style={{ fontSize: 12 }}>레이팅</span>
-            <b style={{ fontSize: 15 }}>{profile.rating}</b>
-          </div>
+    
         </div>
 
         <div style={{ flex: 1 }}></div>
