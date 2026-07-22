@@ -1,3 +1,4 @@
+//client/src/pages/GamePage.tsx
 import React, { useState, useEffect } from 'react';
 import { Socket } from 'socket.io-client';
 import '../assets/styles/GameStyles.css';
@@ -24,7 +25,15 @@ interface PlayerInfo {
   socketId?: string;
   color: 'black' | 'white';
   isReady?: boolean;
+  augments?: string[];
 }
+
+const augmentIconMap: Record<string, string> = {
+  sniper: '🎯', seal_empty: '🚫', coin_flip: '🪙', double_coin: '🔀',
+  chaos_party: '🌈', hidden_move: '🥷', fog_of_war: '🌫️', mixer: '🌪️',
+  meteor: '☄️', different_game: '🧩', peek: '👁️', confiscate: '🔒',
+  steal: '🦹', bombardment: '💣', table_flip: '┻━┻', undo: '⏪'
+};
 
 export const GamePage: React.FC<GamePageProps> = ({
   socket,
@@ -94,6 +103,9 @@ export const GamePage: React.FC<GamePageProps> = ({
       
       if (me && me.color) {
         setMyColor(me.color);
+        if (me.augments) {
+          setMyAugments(me.augments);
+        }
       }
       if (opp && opp.color) {
         setOpponent(opp);
@@ -121,6 +133,9 @@ export const GamePage: React.FC<GamePageProps> = ({
     // 착수 성공 시 서버가 보내는 갱신 신호 처리
     const handleGameUpdate = (data: any) => {
       console.log('[GamePage] 게임 업데이트 수신:', data);
+
+      // 서버로부터 턴 진행(동기화) 신호가 오면 모든 증강 대기가 끝났다고 판단하여 모달을 닫음
+      setIsAugmentSelecting(false);
 
       if (data.currentTurn) {
         const nextTurn = data.currentTurn === 'b' ? 'black' : data.currentTurn === 'w' ? 'white' : data.currentTurn;
@@ -151,7 +166,12 @@ export const GamePage: React.FC<GamePageProps> = ({
     const handleAugmentSelectRequest = (data: { options: AugmentOption[] }) => {
       console.log('[GamePage] 증강 선택 요청 수신:', data.options);
       if (data && Array.isArray(data.options)) {
-        setAugmentOptions(data.options);
+        const formattedOptions = data.options.map(opt => ({
+          ...opt,
+          icon: augmentIconMap[opt.id] || '❓',
+          rarity: opt.rarity as 'COMMON' | 'RARE' | 'EPIC' | 'LEGEND'
+        }));
+        setAugmentOptions(formattedOptions);
         setIsAugmentSelecting(true);
       }
     };
@@ -181,6 +201,7 @@ export const GamePage: React.FC<GamePageProps> = ({
     socket.on('game:update', handleGameUpdate); // 분리된 핸들러 연결
     socket.on('game:error', handleGameError);
     socket.on('game:over', handleGameOver);
+    socket.on('game:augment:select', handleAugmentSelectRequest);
 
     // 진입 즉시 동기화 요청
     socket.emit('game:sync', { roomId });
@@ -191,6 +212,7 @@ export const GamePage: React.FC<GamePageProps> = ({
       socket.off('game:update', handleGameUpdate);
       socket.off('game:error', handleGameError);
       socket.off('game:over', handleGameOver);
+      socket.off('game:augment:select', handleAugmentSelectRequest);
     };
   }, [socket, roomId, user, onLeave, myColor]);
 
@@ -241,7 +263,6 @@ export const GamePage: React.FC<GamePageProps> = ({
     console.log('[GamePage] 증강 선택 완료, 서버로 전송:', selectedId);
     
     socket.emit('game:augment:choose', { roomId, augmentId: selectedId });
-    setIsAugmentSelecting(false);
   };
 
   const nextAugmentTurn = turnCount <= 15 ? 15 : 30;
@@ -317,10 +338,12 @@ export const GamePage: React.FC<GamePageProps> = ({
           <p className="inv-label">🃏 내 증강 (내 턴에 클릭해서 사용)</p>
           <div className="inv-row">
             {[0, 1, 2].map((idx) => {
-              const aug = myAugments[idx];
+              const augId = myAugments[idx];
+              const displayIcon = augId ? augmentIconMap[augId] || '❓' : null;
+              
               return (
-                <div key={idx} className={`inv-slot my ${aug ? 'filled' : ''}`}>
-                  {aug ? aug : '＋'}
+                <div key={idx} className={`inv-slot my ${augId ? 'filled' : ''}`}>
+                  {displayIcon ? displayIcon : '＋'}
                 </div>
               );
             })}

@@ -7,7 +7,7 @@ export interface AugmentOption {
   name: string;
   description: string;
   icon: string;
-  rarity: 'COMMON' | 'RARE';
+  rarity: 'COMMON' | 'RARE' | 'EPIC' | 'LEGEND';
 }
 
 interface AugmentSelectModalProps {
@@ -21,14 +21,27 @@ export const AugmentSelectModal: React.FC<AugmentSelectModalProps> = ({
 }) => {
   // 기본값으로 첫 번째 증강을 선택 상태로 두기
   const [selectedId, setSelectedId] = useState<string>(options[0]?.id || '');
+  const [isWaiting, setIsWaiting] = useState<boolean>(false);
 
   const handleComplete = () => {
     if (!selectedId) {
       alert('증강을 선택해주세요.');
       return;
     }
+    setIsWaiting(true);
     onSelectComplete(selectedId);
   };
+
+  if (isWaiting) {
+    return (
+      <div className="aug-modal-overlay">
+        <div className="aug-modal-container" style={{ alignItems: 'center', justifyContent: 'center', minHeight: '200px' }}>
+          <p className="aug-modal-title">상대방을 기다리는 중...</p>
+          <p className="aug-hint">상대 플레이어가 증강을 선택하고 있습니다.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="aug-modal-overlay">
@@ -39,7 +52,7 @@ export const AugmentSelectModal: React.FC<AugmentSelectModalProps> = ({
         <div className="aug-card-list">
           {options.map((item) => {
             const isSelected = item.id === selectedId;
-            const rarityClass = item.rarity === 'RARE' ? 'rare' : 'common';
+            const rarityClass = item.rarity.toLowerCase();
 
             return (
               <div
