@@ -58,6 +58,7 @@ export const GamePage: React.FC<GamePageProps> = ({
   const [isAugmentSelecting, setIsAugmentSelecting] = useState<boolean>(false);
   const [augmentOptions, setAugmentOptions] = useState<AugmentOption[]>([]);
   const [selectedAugmentToUse, setSelectedAugmentToUse] = useState<any | null>(null);
+  const [augmentTargetMode, setAugmentTargetMode] = useState<any | null>(null);
 
   // 서버의 2차원 보드 데이터를 돌 객체 배열로 변환
   const parseBoardToStones = (board: any[][]): Stone[] => {
@@ -234,6 +235,18 @@ export const GamePage: React.FC<GamePageProps> = ({
 
     if (x < 0 || x > 14 || y < 0 || y > 14) return;
 
+    // 대상 선택형 증강을 사용하기 위해 보드를 클릭한 경우
+    if (augmentTargetMode) {
+      console.log(`[클라이언트 증강 대상 선택] 증강: ${augmentTargetMode.id}, 좌표: (${x}, ${y})`);
+      socket.emit('game:augment:use', { 
+        roomId, 
+        augmentId: augmentTargetMode.id, 
+        target: { x, y } 
+      });
+      setAugmentTargetMode(null);
+      return;
+    }
+
     if (stones.some((s) => s.x === x && s.y === y)) {
       return;
     }
@@ -281,8 +294,17 @@ export const GamePage: React.FC<GamePageProps> = ({
   const handleConfirmUseAugment = () => {
     if (!socket || !selectedAugmentToUse) return;
 
-    socket.emit('game:augment:use', { roomId, augmentId: selectedAugmentToUse.id });
+  // 즉시 발동이 아닌 대상 선택이 필요한 증강인 경우
+  if (selectedAugmentToUse.type === 'TARGET_SELECT') {
+    setAugmentTargetMode(selectedAugmentToUse);
     setSelectedAugmentToUse(null);
+    alert('효과를 적용할 보드 위의 위치(돌 또는 빈칸)를 클릭해주세요.');
+    return;
+  }
+
+  // 바로 서버로 전송하는 증강
+  socket.emit('game:augment:use', { roomId, augmentId: selectedAugmentToUse.id });
+  setSelectedAugmentToUse(null);
   };
 
   const nextAugmentTurn = turnCount <= 15 ? 15 : 30;

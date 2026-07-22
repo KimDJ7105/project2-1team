@@ -550,6 +550,90 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     }
   });
 
+  socket.on('game:augment:use', async ({ roomId, augmentId, target }: { roomId: string; augmentId: string; target?: { x: number; y: number } }) => {
+    try {
+      if (!userEmail) {
+        socket.emit('game:error', { message: '인증되지 않은 사용자입니다.' });
+        return;
+      }
+
+      const room = gameRoomManager.getRoom(roomId);
+      if (!room || room.status !== 'playing') {
+        socket.emit('game:error', { message: '진행 중인 게임이 아닙니다.' });
+        return;
+      }
+
+      const player = room.players.get(userEmail);
+      if (!player) {
+        socket.emit('game:error', { message: '방에 참여한 플레이어가 아닙니다.' });
+        return;
+      }
+
+      if (player.color !== room.currentTurn) {
+        socket.emit('game:error', { message: '현재 본인의 차례가 아닙니다.' });
+        return;
+      }
+
+      // 플레이어가 실제로 해당 증강을 보유하고 있는지 확인
+      const augmentIndex = player.augments.findIndex((a) => a.id === augmentId);
+      if (augmentIndex === -1) {
+        socket.emit('game:error', { message: '보유하지 않은 증강입니다.' });
+        return;
+      }
+
+      const augmentData = AUGMENT_MAP.get(augmentId);
+      if (!augmentData) {
+        socket.emit('game:error', { message: '존재하지 않는 증강 정보입니다.' });
+        return;
+      }
+
+      // TARGET_SELECT 타입인데 대상 좌표가 안 넘어온 경우 예외 처리
+      if (augmentData.type === 'TARGET_SELECT' && (!target || target.x === undefined || target.y === undefined)) {
+        socket.emit('game:error', { message: '증강을 사용할 대상 위치를 지정해야 합니다.' });
+        return;
+      }
+
+      console.log(`[Augment Use] ${player.nickname} 님이 증강 사용: ${augmentData.name} (대상:`, target, `)`);
+
+      // 증강 효과 세부 처리 분기
+      if (augmentId === 'sniper' && target) {
+        // 저격: 상대 돌 1개 선택해 제거
+        const targetStoneColor = target.x >= 0 && target.x <= 14 && target.y >= 0 && target.y <= 14 ? room.board[target.y][target.x] : '';
+        const opponentColor = player.color === 'black' ? 'white' : 'black';
+
+        if (targetStoneColor !== opponentColor) {
+          socket.emit('game:error', { message: '제거할 수 없는 위치이거나 상대방의 돌이 아닙니다.' });
+          return;
+        }
+        room.board[target.y][target.x] = ''; // 돌 제거
+      } 
+      else if (augmentId === 'seal_empty' && target) {
+        // 빈칸 봉인 등 추가 증강 효과 로직 자리
+        const cellVal = room.board[target.y]?.[target.x];
+        if (cellVal !== '') {
+          socket.emit('game:error', { message: '빈칸에만 봉인을 사용할 수 있습니다.' });
+          return;
+        }
+        // 봉인 상태를 보드나 방 정보에 기록
+      }
+
+      // todo. 사용 완료된 증강은 소모 처리 필요. 
+      
+
+      // 갱신된 보드와 플레이어 상태를 방 전체에 동기화
+      io.to(roomId).emit('game:update', {
+        currentTurn: room.currentTurn,
+        turnCount: room.turnCount,
+        board: room.board,
+        players: Array.from(room.players.values())
+      });
+
+    } catch (err) {
+      console.error('증강 사용 처리 중 오류:', err);
+      socket.emit('game:error', { message: '증강 사용 처리 중 서버 오류가 발생했습니다.' });
+    }
+  });
+
   //항복 요청 처리 
   socket.on('game:surrender', async ({ roomId }) => {
     try {
