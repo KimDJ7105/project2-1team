@@ -640,7 +640,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
         room.board[target.y][target.x] = ''; // 돌 제거
       } 
       else if (augmentId === 'seal_empty' && target) {
-        // 빈칸 봉인 등 추가 증강 효과 로직 자리
+        // 빈칸 봉인
         const cellVal = room.board[target.y]?.[target.x];
         if (cellVal !== '') {
           socket.emit('game:error', { message: '빈칸에만 봉인을 사용할 수 있습니다.' });
@@ -648,9 +648,267 @@ io.on('connection', (socket: AuthenticatedSocket) => {
         }
         // 봉인 상태를 보드나 방 정보에 기록
       }
+      else if (augmentId === 'coin_flip' ) {
+        // 자신의 돌 하나를 랜덤한 위치로 이동시킵니다.
+        const myColor = player.color;
+        const myStones: { x: number; y: number }[] = [];
+        const emptyCells: { x: number; y: number }[] = [];
 
-      // todo. 사용 완료된 증강은 소모 처리 필요. 
-      
+        // 1. 보드 전체를 돌며 내 돌 좌표와 빈칸 좌표 수집
+        for (let y = 0; y < 15; y++) {
+          for (let x = 0; x < 15; x++) {
+            if (room.board[y][x] === myColor) {
+              myStones.push({ x, y });
+            } else if (room.board[y][x] === '') {
+              emptyCells.push({ x, y });
+            }
+          }
+        }
+
+        if (myStones.length === 0) {
+          socket.emit('game:error', { message: '이동시킬 내 돌이 없습니다.' });
+          return;
+        }
+
+        if (emptyCells.length === 0) {
+          socket.emit('game:error', { message: '이동할 빈칸이 없습니다.' });
+          return;
+        }
+
+        // 2. 무작위로 내 돌 하나 선택
+        const randomStone = myStones[Math.floor(Math.random() * myStones.length)];
+        // 3. 무작위로 빈칸 하나 선택
+        const randomEmpty = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+
+        // 4. 돌 이동 처리
+        room.board[randomStone.y][randomStone.x] = '';
+        room.board[randomEmpty.y][randomEmpty.x] = myColor;
+
+        console.log(`[Coin Flip] ${player.nickname} 님의 돌 이동: (${randomStone.x}, ${randomStone.y}) -> (${randomEmpty.x}, ${randomEmpty.y})`);
+      }
+      else if (augmentId === 'double_coin') {
+        // 랜덤한 상대 돌과 랜덤한 자신의 돌 위치를 바꿉니다.
+        const myColor = player.color;
+        const opponentColor = myColor === 'black' ? 'white' : 'black';
+        
+        const myStones: { x: number; y: number }[] = [];
+        const opponentStones: { x: number; y: number }[] = [];
+
+        // 1. 보드 전체를 돌며 내 돌과 상대 돌 좌표 수집
+        for (let y = 0; y < 15; y++) {
+          for (let x = 0; x < 15; x++) {
+            if (room.board[y][x] === myColor) {
+              myStones.push({ x, y });
+            } else if (room.board[y][x] === opponentColor) {
+              opponentStones.push({ x, y });
+            }
+          }
+        }
+
+        if (myStones.length === 0) {
+          socket.emit('game:error', { message: '위치를 바꿀 내 돌이 없습니다.' });
+          return;
+        }
+
+        if (opponentStones.length === 0) {
+          socket.emit('game:error', { message: '위치를 바꿀 상대의 돌이 없습니다.' });
+          return;
+        }
+
+        // 2. 내 돌과 상대 돌 중 하나씩 무작위 선택
+        const randomMyStone = myStones[Math.floor(Math.random() * myStones.length)];
+        const randomOppStone = opponentStones[Math.floor(Math.random() * opponentStones.length)];
+
+        // 3. 두 돌의 위치 스왑(교체) 처리
+        room.board[randomMyStone.y][randomMyStone.x] = opponentColor;
+        room.board[randomOppStone.y][randomOppStone.x] = myColor;
+
+        console.log(`[Double Coin] ${player.nickname} 님의 돌 교체: 내 돌(${randomMyStone.x}, ${randomMyStone.y}) <-> 상대 돌(${randomOppStone.x}, ${randomOppStone.y})`);
+      }
+      else if (augmentId === 'chaos_party') {
+        // 3턴 동안 모든 돌의 색을 변화시킵니다.
+        for (const p of room.players.values()) {
+          // 중복 적용 방지
+          if (!p.activeEffects.some(e => e.id === 'chaos_party')) {
+            p.activeEffects.push({
+              id: 'chaos_party',
+              turnsRemaining: 3
+            });
+          }
+          else {
+            const existingEffect = p.activeEffects.find(e => e.id === 'chaos_party');
+            if (existingEffect) {
+              existingEffect.turnsRemaining = 3; // 이미 있으면 턴 수 초기화
+            }
+          }
+        }
+
+        console.log(`[Chaos Party] ${player.nickname} 님이 대환장 파티(3턴 지속) 효과를 발동했습니다.`);
+      }
+      else if (augmentId === 'hidden_move') {
+        // 이번 턴에 둔 돌이 1턴 동안 상대에게 안 보입니다.
+      }
+      else if (augmentId === 'fog_of_war') {
+        // 3턴 동안 상대가 자신의 돌과 인접한 칸만 보이도록 합니다.
+        const opponent = Array.from(room.players.values()).find(p => p.email !== userEmail);
+        
+        if (opponent) {
+          const existingEffect = opponent.activeEffects.find(e => e.id === 'fog_of_war');
+          if (existingEffect) {
+            existingEffect.turnsRemaining = 3;
+          } else {
+            opponent.activeEffects.push({
+              id: 'fog_of_war',
+              turnsRemaining: 3
+            });
+          }
+          console.log(`[Fog of War] ${player.nickname} 님이 ${opponent.nickname} 님에게 전장의 안개(3턴 지속) 효과를 적용했습니다.`);
+        }
+      }
+      else if (augmentId === 'mixer' && target) {
+        // 3x3 칸 내의 바둑알을 무작위로 섞습니다.
+        const minX = Math.max(0, target.x - 1);
+        const maxX = Math.min(14, target.x + 1);
+        const minY = Math.max(0, target.y - 1);
+        const maxY = Math.min(14, target.y + 1);
+
+        const cells: { x: number; y: number }[] = [];
+        const stones: string[] = [];
+
+        // 1. 3x3 범위 내의 좌표와 들어있는 돌(또는 빈칸) 수집
+        for (let y = minY; y <= maxY; y++) {
+          for (let x = minX; x <= maxX; x++) {
+            cells.push({ x, y });
+            stones.push(room.board[y][x]);
+          }
+        }
+
+        // 2. 수집한 돌들을 무작위로 섞기 (Fisher-Yates Shuffle)
+        for (let i = stones.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [stones[i], stones[j]] = [stones[j], stones[i]];
+        }
+
+        // 3. 섞인 돌들을 다시 해당 칸들에 배치
+        for (let i = 0; i < cells.length; i++) {
+          const { x, y } = cells[i];
+          room.board[y][x] = stones[i];
+        }
+
+        console.log(`[Mixer] ${player.nickname} 님이 (${target.x}, ${target.y}) 중심 3x3 영역의 돌들을 무작위로 섞었습니다.`);
+      }
+      else if (augmentId === 'meteor' && target) {
+        // 3x3 칸 내의 모든 바둑알을 무작위 위치로 이동시킵니다
+        // 3x3 칸 내의 모든 바둑알을 바둑판 전체의 무작위 위치로 이동시킵니다.
+        const minX = Math.max(0, target.x - 1);
+        const maxX = Math.min(14, target.x + 1);
+        const minY = Math.max(0, target.y - 1);
+        const maxY = Math.min(14, target.y + 1);
+
+        const collectedStones: string[] = [];
+
+        // 1. 3x3 범위 내의 돌들을 수집하고 해당 자리를 빈칸으로 만들기
+        for (let y = minY; y <= maxY; y++) {
+          for (let x = minX; x <= maxX; x++) {
+            const stone = room.board[y][x];
+            if (stone === 'black' || stone === 'white') {
+              collectedStones.push(stone);
+              room.board[y][x] = '';
+            }
+          }
+        }
+
+        if (collectedStones.length === 0) {
+          socket.emit('game:error', { message: '3x3 범위 내에 이동시킬 돌이 없습니다.' });
+          return;
+        }
+
+        // 2. 바둑판 전체에서 현재 비어 있는 모든 칸들의 좌표 수집
+        const emptyCells: { x: number; y: number }[] = [];
+        for (let y = 0; y < 15; y++) {
+          for (let x = 0; x < 15; x++) {
+            if (room.board[y][x] === '') {
+              emptyCells.push({ x, y });
+            }
+          }
+        }
+
+        // 만약 남은 빈칸이 수집한 돌보다 적다면 에러 처리 방지
+        if (emptyCells.length < collectedStones.length) {
+          socket.emit('game:error', { message: '이동시킬 빈 공간이 부족합니다.' });
+          return;
+        }
+
+        // 3. 수집한 돌들을 무작위 빈칸에 각각 배치
+        for (const stone of collectedStones) {
+          const randomIndex = Math.floor(Math.random() * emptyCells.length);
+          const targetCell = emptyCells.splice(randomIndex, 1)[0]; // 뽑은 칸은 목록에서 제거
+          room.board[targetCell.y][targetCell.x] = stone;
+        }
+
+        console.log(`[Meteor] ${player.nickname} 님이 (${target.x}, ${target.y}) 중심 3x3 영역의 돌 ${collectedStones.length}개를 무작위 위치로 날려버렸습니다.`);
+      }
+      else if (augmentId === 'different_game' && target) {
+        // 자신의 돌로 둘러진 영역에 있는 상대 돌을 제거합니다.
+      }
+      else if (augmentId === 'peek') {
+        // 상대의 증강 1개를 확인합니다.
+      }
+      else if (augmentId === 'confiscate') {
+        // 상대의 증강 1개를 사용 상태로 만듭니다.
+      }
+      else if (augmentId === 'steal') {
+        // 상대 증강 1개를 대신 사용합니다.
+      }
+      else if (augmentId === 'bombardment') {
+        // 랜덤한 위치에 랜덤한 돌 5개를 둡니다.
+      }
+      else if (augmentId === 'table_flip') {
+        // 모든 돌 위치를 랜덤한 위치로 이동시킵니다.
+        const allStones: string[] = [];
+
+        // 1. 보드 전체의 돌들을 수집하고 자리를 비우기
+        for (let y = 0; y < 15; y++) {
+          for (let x = 0; x < 15; x++) {
+            const stone = room.board[y][x];
+            if (stone === 'black' || stone === 'white') {
+              allStones.push(stone);
+              room.board[y][x] = '';
+            }
+          }
+        }
+
+        if (allStones.length === 0) {
+          socket.emit('game:error', { message: '이동시킬 돌이 판 위에 없습니다.' });
+          return;
+        }
+
+        // 2. 바둑판 전체의 빈칸 좌표 목록 생성
+        const emptyCells: { x: number; y: number }[] = [];
+        for (let y = 0; y < 15; y++) {
+          for (let x = 0; x < 15; x++) {
+            emptyCells.push({ x, y });
+          }
+        }
+
+        // 3. 수집한 돌들을 무작위 빈칸에 재배치
+        for (const stone of allStones) {
+          const randomIndex = Math.floor(Math.random() * emptyCells.length);
+          const targetCell = emptyCells.splice(randomIndex, 1)[0];
+          room.board[targetCell.y][targetCell.x] = stone;
+        }
+
+        console.log(`[Table Flip] ${player.nickname} 님이 판을 뒤엎어 모든 돌(${allStones.length}개)의 위치를 무작위로 섞었습니다.`);
+      }
+      else if (augmentId === 'undo') {
+        // 이전 내 턴으로 돌아갑니다. (이전 턴 상대 돌과 내 돌 제거)
+      }
+
+      // 사용 완료된 증강은 소모 처리 필요. 
+      const targetAugment = player.augments.find((a) => a.id === augmentId);
+      if (targetAugment) {
+        targetAugment.isUsed = true;
+      }
 
       // 갱신된 보드와 플레이어 상태를 방 전체에 동기화
       broadcastGameUpdate(io, room)
