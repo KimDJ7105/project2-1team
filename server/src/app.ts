@@ -56,6 +56,8 @@ io.use(socketAuthMiddleware);
 // 3. 실시간 소켓 통신 이벤트 리스너 정의 (인증을 통과한 소켓만 들어옴)
 io.on('connection', (socket: AuthenticatedSocket) => {
   // 인증 미들웨어에서 바인딩한 유저 정보 추출
+  const userId = socket.user?.userId;
+  if (userId === undefined) return;
   const userEmail = socket.user?.email;
   const userNickname = socket.user?.nickname;
 
@@ -177,7 +179,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     const roomInstance = gameRoomManager.createRoom(roomId, titleValue);
     if (userEmail && userNickname) {
       console.log('서버: 방 생성 성공 이벤트 발송 테스트', roomId);
-      roomInstance.addPlayer(userEmail, userNickname, socket.id);
+      roomInstance.addPlayer(userId, userEmail, userNickname, socket.id);
       socket.join(roomId); // Socket.io 룸 채널 입장
     }
 
@@ -228,7 +230,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       }
 
       // 2. 룸 인스턴스에 플레이어 추가 시도 (인원 초과 시 false 반환)
-      const success = roomInstance.addPlayer(userEmail, userNickname, socket.id);
+      const success = roomInstance.addPlayer(userId, userEmail, userNickname, socket.id);
       if (!success) {
         socket.emit('room:join:fail', { message: '방 인원이 가득 찼습니다.' });
         return;
@@ -367,7 +369,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
 
       if (userEmail && userNickname) {
         // 새로고침으로 인해 바뀐 새로운 socket.id로 유저 정보를 갱신
-        roomInstance.addPlayer(userEmail, userNickname, socket.id);
+        roomInstance.addPlayer(userId, userEmail, userNickname, socket.id);
         socket.join(roomId);
 
         // 방 전체에 갱신된 플레이어 목록 브로드캐스트
@@ -389,7 +391,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
 
       // 새로고침이나 화면 전환 시 소켓 ID 갱신
       if (userEmail && userNickname) {
-        room.addPlayer(userEmail, userNickname, socket.id);
+        room.addPlayer(userId, userEmail, userNickname, socket.id);
         socket.join(roomId);
       }
 
@@ -466,33 +468,26 @@ io.on('connection', (socket: AuthenticatedSocket) => {
         try {
           const blackPlayer = Array.from(room.players.values()).find(p => p.color === 'black');
           const whitePlayer = Array.from(room.players.values()).find(p => p.color === 'white');
+          const winner = Array.from(room.players.values()).find(p => p.color === result.color);
+          const loser = Array.from(room.players.values()).find(p => p.color !== result.color);
 
           if (blackPlayer && whitePlayer && winner) {
-            const [blackUser, whiteUser, winnerUser] = await Promise.all([
-              userRepository.findByEmail(blackPlayer.email),
-              userRepository.findByEmail(whitePlayer.email),
-              userRepository.findByEmail(winner.email)
-            ]);
+            // 대국 기록 저장
+            await gameRecordRepositoryImpl.saveGameRecord({
+              blackUserId: blackPlayer.userId,
+              whiteUserId: whitePlayer.userId,
+              winnerUserId: winner.userId,
+              boardState: room.board,
+              endReason: "WIN",
+              totalTurn: room.turnCount
+            });
 
-            if (blackUser && whiteUser && winnerUser) {
-              await gameRecordRepositoryImpl.saveGameRecord({
-                blackUserId: blackUser.userId,
-                whiteUserId: whiteUser.userId,
-                winnerUserId: winnerUser.userId,
-                boardState: room.board,
-                endReason: "WIN",
-                totalTurn: room.turnCount
-              });
-            }
+            // 승자 전적 반영
+            await userStateRepositoryImpl.applyGameResult(winner.userId, 'win', 10);
 
-            if (winnerUser) {
-              await userStateRepositoryImpl.applyGameResult(winnerUser.userId, 'win', 10);
-            }
+            // 패자 전적 반영
             if (loser) {
-              const loserUser = await userRepository.findByEmail(loser.email);
-              if (loserUser) {
-                await userStateRepositoryImpl.applyGameResult(loserUser.userId, 'lose', -10);
-              }
+              await userStateRepositoryImpl.applyGameResult(loser.userId, 'lose', -10);
             }
             console.log(`[전적 및 대국 기록 저장 완료] 승자: ${winner?.nickname}, 패자: ${loser?.nickname}`);
           }

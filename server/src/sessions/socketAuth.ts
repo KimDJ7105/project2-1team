@@ -5,6 +5,7 @@ import { redisSessionManager } from './redisSessionManager';
 // 소켓 객체에 유저 정보를 심어주기 위한 인터페이스
 export interface AuthenticatedSocket extends Socket {
   user?: {
+    userId: number;
     email: string;
     nickname: string;
   };
@@ -31,6 +32,7 @@ export const socketAuthMiddleware = async (
 
     // 검증에 성공하면 소켓 객체에 유저 정보를 바인딩하여, 이후 게임 로직에서 바로 쓸 수 있도록 처리
     socket.user = {
+      userId: session.userId,
       email: session.email, // createSession 호출 시 넣어준 email
       nickname: session.nickname,
     };

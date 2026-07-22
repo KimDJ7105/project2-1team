@@ -3,6 +3,7 @@
 import { AUGMENT_LIST, IAugment } from '../shared/data/augments';
 
 export interface Player {
+  userId: number;
   email: string;
   nickname: string;
   socketId: string;
@@ -29,7 +30,7 @@ export class GameRoom {
   }
 
   // 플레이어 참가
-  public addPlayer(email: string, nickname: string, socketId: string): boolean {
+  public addPlayer(userId: number, email: string, nickname: string, socketId: string): boolean {
     if (this.players.has(email)) {
       // 이미 참가 중인 경우 소켓 ID만 갱신
       const player = this.players.get(email)!;
@@ -46,6 +47,7 @@ export class GameRoom {
     const color = this.players.size === 0 ? 'black' : 'white';
     
     this.players.set(email, {
+      userId,
       email,
       nickname,
       socketId,
