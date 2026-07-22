@@ -281,6 +281,12 @@ export const GamePage: React.FC<GamePageProps> = ({
   const handleAugmentClick = (aug: any) => {
     if (!aug) return;
 
+    // 이미 사용된 증강인 경우 클릭 차단
+    if (aug.isUsed) {
+      alert('이미 사용한 증강입니다.');
+      return;
+    }
+
     if (currentTurn !== myColor) {
       alert('자신의 턴에만 증강을 사용할 수 있습니다.');
       return;
@@ -381,13 +387,13 @@ export const GamePage: React.FC<GamePageProps> = ({
           <div className="inv-row">
             {[0, 1, 2].map((idx) => {
               const aug = myAugments[idx];
-              // 서버에서 받은 객체 데이터에서 아이콘 정보를 추출
               const displayIcon = aug ? (aug.icon || augmentIconMap[aug.id] || '❓') : null;
               
               return (
                 <div 
                   key={idx} 
-                  className={`inv-slot my ${aug ? 'filled' : ''}`}
+                  className={`inv-slot my ${aug ? 'filled' : ''} ${aug?.isUsed ? 'used' : ''}`}
+                  style={aug?.isUsed ? { opacity: 0.4, filter: 'grayscale(100%)', cursor: 'not-allowed' } : {}}
                   onClick={() => handleAugmentClick(aug)}
                 >
                   {displayIcon ? displayIcon : '＋'}
