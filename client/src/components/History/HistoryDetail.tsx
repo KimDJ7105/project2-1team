@@ -1,5 +1,4 @@
 // client/src/components/History/HistoryDetail.tsx
-import React from 'react';
 
 interface GameRecord {
   id: number;

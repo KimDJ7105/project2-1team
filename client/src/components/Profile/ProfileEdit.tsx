@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import type { ChangeEvent } from 'react';
 import '../../assets/styles/ProfileStyles.css';
 import { getProfileUploadUrl, updateProfile } from '../../api/profileApi';

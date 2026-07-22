@@ -38,7 +38,6 @@ const augmentIconMap: Record<string, string> = {
 export const GamePage: React.FC<GamePageProps> = ({
   socket,
   roomId,
-  roomTitle,
   user,
   onLeave,
 }) => {
