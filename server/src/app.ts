@@ -35,6 +35,36 @@ app.get('/health', (req, res) => {
   res.status(200).send('OK');
 });
 
+// 게임 상태를 방 내 플레이어들에게 조건에 맞춰 전송하는 헬퍼 함수
+function broadcastGameUpdate(io: Server, room: any, extraData: object = {}) {
+  const playersArray = Array.from(room.players.values()) as any[];
+  // 플레이어 중 한 명이라도 activeEffects가 존재하는지 확인
+  const hasActiveEffects = playersArray.some(p => p.activeEffects && p.activeEffects.length > 0);
+
+  if (hasActiveEffects) {
+    // 상태이상(특수 효과)이 있는 경우: 각 플레이어마다 맞춤형으로 개별 전송
+    for (const player of playersArray) {
+      // 나중에 필요에 따라 player마다 다른 보드나 상태를 필터링할 수 있는 확장 포인트
+      io.to(player.socketId).emit('game:update', {
+        currentTurn: room.currentTurn,
+        turnCount: room.turnCount,
+        board: room.board,
+        players: playersArray,
+        ...extraData
+      });
+    }
+  } else {
+    // 상태이상이 없는 경우: 기존처럼 방 전체에 일괄 브로드캐스트
+    io.to(room.roomId).emit('game:update', {
+      currentTurn: room.currentTurn,
+      turnCount: room.turnCount,
+      board: room.board,
+      players: playersArray,
+      ...extraData
+    });
+  }
+}
+
 // API 라우터 등록
 app.use('/api/users', userRoutes);
 app.use('/api/profile', profileRoutes);
@@ -433,15 +463,16 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       }
 
       // 착수 성공 시 방 전체 플레이어에게 게임 상태 브로드캐스트
-      io.to(roomId).emit('game:update', {
-        x,
-        y,
-        color: result.color,
-        currentTurn: room.currentTurn,
-        turnCount: room.turnCount,
-        board: room.board,
-        players: Array.from(room.players.values())
-      });
+      broadcastGameUpdate(io, room, { x, y, color: result.color });
+      // io.to(roomId).emit('game:update', {
+      //   x,
+      //   y,
+      //   color: result.color,
+      //   currentTurn: room.currentTurn,
+      //   turnCount: room.turnCount,
+      //   board: room.board,
+      //   players: Array.from(room.players.values())
+      // });
 
       // 승리 조건이 달성된 경우 게임 종료 이벤트 발송
       if (result.isWin) {
@@ -537,12 +568,13 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       // 방의 모든 플레이어가 선택을 마쳤는지 확인
       if (room.pendingAugmentPlayers.size === 0) {
         // 선택 완료된 상태를 방 전체에 동기화
-        io.to(roomId).emit('game:update', {
-          currentTurn: room.currentTurn,
-          turnCount: room.turnCount,
-          board: room.board,
-          players: Array.from(room.players.values())
-        });
+        broadcastGameUpdate(io, room)
+        // io.to(roomId).emit('game:update', {
+        //   currentTurn: room.currentTurn,
+        //   turnCount: room.turnCount,
+        //   board: room.board,
+        //   players: Array.from(room.players.values())
+        // });
         console.log(`[Augment] 방(${roomId}) 모든 인원 증강 선택 완료. 게임 진행 동기화.`);
       }
     } catch (err) {
@@ -621,12 +653,13 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       
 
       // 갱신된 보드와 플레이어 상태를 방 전체에 동기화
-      io.to(roomId).emit('game:update', {
-        currentTurn: room.currentTurn,
-        turnCount: room.turnCount,
-        board: room.board,
-        players: Array.from(room.players.values())
-      });
+      broadcastGameUpdate(io, room)
+      // io.to(roomId).emit('game:update', {
+      //   currentTurn: room.currentTurn,
+      //   turnCount: room.turnCount,
+      //   board: room.board,
+      //   players: Array.from(room.players.values())
+      // });
 
     } catch (err) {
       console.error('증강 사용 처리 중 오류:', err);
