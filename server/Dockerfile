@@ -29,4 +29,4 @@ COPY --from=builder /app/schema.sql ./schema.sql
 
 EXPOSE 8080
 
-CMD ["npm", "start"]
+CMD ["node", "dist/app.js"]
