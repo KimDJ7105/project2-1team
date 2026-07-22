@@ -58,6 +58,7 @@ export const GamePage: React.FC<GamePageProps> = ({
   const [augmentOptions, setAugmentOptions] = useState<AugmentOption[]>([]);
   const [selectedAugmentToUse, setSelectedAugmentToUse] = useState<any | null>(null);
   const [augmentTargetMode, setAugmentTargetMode] = useState<any | null>(null);
+  const [sealedCells, setSealedCells] = useState<{ x: number; y: number; turnsRemaining: number }[]>([]);
 
   // 서버의 2차원 보드 데이터를 돌 객체 배열로 변환
   const parseBoardToStones = (board: any[][]): Stone[] => {
@@ -126,6 +127,10 @@ export const GamePage: React.FC<GamePageProps> = ({
         setStones(parseBoardToStones(data.board));
       }
 
+      if (data.sealedCells) {
+        setSealedCells(data.sealedCells);
+      }
+
       if (data.players && Array.isArray(data.players)) {
         syncPlayersInfo(data.players);
       }
@@ -143,6 +148,10 @@ export const GamePage: React.FC<GamePageProps> = ({
         setCurrentTurn(nextTurn);
       }
       if (data.turnCount !== undefined) setTurnCount(data.turnCount);
+
+      if (data.sealedCells !== undefined) {
+        setSealedCells(data.sealedCells);
+      }
 
       // 게임 도중에도 플레이어 정보가 실려올 경우 색상 상태를 다시 보장
       if (data.players && Array.isArray(data.players)) {
@@ -365,6 +374,35 @@ export const GamePage: React.FC<GamePageProps> = ({
           <div className="star-point" style={{ top: getStarPos(3), left: getStarPos(11) }}></div>
           <div className="star-point" style={{ top: getStarPos(11), left: getStarPos(3) }}></div>
           <div className="star-point" style={{ top: getStarPos(11), left: getStarPos(11) }}></div>
+          
+          {/* 봉인된 칸 표시 렌더링 */}
+          {sealedCells.map((cell, idx) => {
+            const pixelX = 2 + 14 + cell.x * 22;
+            const pixelY = 2 + 14 + cell.y * 22;
+            
+            return (
+              <div
+                key={`seal-${idx}`}
+                style={{
+                  position: 'absolute',
+                  top: `${pixelY}px`,
+                  left: `${pixelX}px`,
+                  width: '20px',
+                  height: '20px',
+                  transform: 'translate(-50%, -50%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '14px',
+                  zIndex: 5,
+                  pointerEvents: 'none', // 아이콘이 클릭 이벤트를 막지 않도록 설정
+                  opacity: 0.8
+                }}
+              >
+                🚫
+              </div>
+            );
+          })}
 
           {stones.map((stone, idx) => {
             // border(7px)와 grid-lines의 오프셋(14px)을 더해 주어야 격자 교차점과 정확히 일치함

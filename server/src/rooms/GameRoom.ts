@@ -23,6 +23,7 @@ export class GameRoom {
   public turnCount: number = 1;
   // 증강 선택을 대기 중인 플레이어 이메일 목록
   public pendingAugmentPlayers: Set<string> = new Set();
+  public sealedCells: { x: number; y: number; turnsRemaining: number }[] = [];
 
   constructor(roomId: string, roomTitle: string) {
     this.roomId = roomId;
@@ -72,6 +73,7 @@ export class GameRoom {
     this.currentTurn = 'black';
     this.status = 'waiting';
     this.turnCount = 1;
+    this.sealedCells = [];
   }
 
   // 착수 검증 및 처리 메서드
@@ -97,6 +99,11 @@ export class GameRoom {
       return { success: false, message: '이미 돌이 놓여 있는 자리입니다.' };
     }
 
+    const isSealed = this.sealedCells.some(cell => cell.x === x && cell.y === y);
+    if (isSealed) {
+      return { success: false, message: '봉인된 칸에는 돌을 둘 수 없습니다.' };
+    }
+
     // 바둑판에 돌 배치
     this.board[y][x] = this.currentTurn;
 
@@ -112,8 +119,15 @@ export class GameRoom {
     this.turnCount += 1;
 
     this.tickEffects(player.email);
+    this.tickSealedCells();
 
     return { success: true, isWin: false, color: player.color };
+  }
+
+  public tickSealedCells(): void {
+    this.sealedCells = this.sealedCells
+      .map(cell => ({ ...cell, turnsRemaining: cell.turnsRemaining - 1 }))
+      .filter(cell => cell.turnsRemaining > 0);
   }
 
   // 4방향 5목 판정 알고리즘

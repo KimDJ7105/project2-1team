@@ -50,6 +50,7 @@ function broadcastGameUpdate(io: Server, room: any, extraData: object = {}) {
         turnCount: room.turnCount,
         board: room.board,
         players: playersArray,
+        sealedCells: room.sealedCells,
         ...extraData
       });
     }
@@ -60,6 +61,7 @@ function broadcastGameUpdate(io: Server, room: any, extraData: object = {}) {
       turnCount: room.turnCount,
       board: room.board,
       players: playersArray,
+      sealedCells: room.sealedCells,
       ...extraData
     });
   }
@@ -345,7 +347,8 @@ io.on('connection', (socket: AuthenticatedSocket) => {
         turn: room.currentTurn, // 항상 'black' (흑돌 선공)
         turnCount: room.turnCount,
         board: room.board,
-        players: Array.from(room.players.values()) 
+        players: Array.from(room.players.values()),
+        sealedCells: room.sealedCells,
       });
 
       if (room.turnCount === 1) {
@@ -431,7 +434,8 @@ io.on('connection', (socket: AuthenticatedSocket) => {
         turn: room.currentTurn,
         turnCount: room.turnCount,
         board: room.board,
-        players: Array.from(room.players.values())
+        players: Array.from(room.players.values()),
+        sealedCells: room.sealedCells,
       });
       console.log(`[GameSync] ${userNickname} 님의 게임 상태 동기화 완료 (방 ID: ${roomId})`);
     } catch (err) {
@@ -650,6 +654,15 @@ io.on('connection', (socket: AuthenticatedSocket) => {
           return;
         }
         // 봉인 상태를 보드나 방 정보에 기록
+        const alreadySealed = room.sealedCells.some((cell: any) => cell.x === target.x && cell.y === target.y);
+        if (alreadySealed) {
+          socket.emit('game:error', { message: '이미 봉인된 칸입니다.' });
+          return;
+        }
+      
+        // 2턴 동안 유지되도록 배열에 밀어넣기
+        room.sealedCells.push({ x: target.x, y: target.y, turnsRemaining: 2 });
+        console.log(`[Seal Empty] ${player.nickname} 님이 (${target.x}, ${target.y}) 칸을 2턴간 봉인했습니다.`);
       }
       else if (augmentId === 'coin_flip' ) {
         // 자신의 돌 하나를 랜덤한 위치로 이동시킵니다.
@@ -865,6 +878,42 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       }
       else if (augmentId === 'bombardment') {
         // 랜덤한 위치에 랜덤한 돌 5개를 둡니다.
+        const emptySpots: { x: number, y: number }[] = [];
+      
+        // 1. 보드 전체를 순회하며 빈칸 좌표 수집
+        for (let y = 0; y < 15; y++) {
+          for (let x = 0; x < 15; x++) {
+            if (room.board[y][x] === '') {
+              emptySpots.push({ x, y });
+            }
+          }
+        }
+
+        // 2. 빈칸이 5개 미만일 경우를 대비해 배치할 돌의 개수 확정
+        const stonesToPlace = Math.min(5, emptySpots.length);
+        if (stonesToPlace === 0) {
+          socket.emit('game:error', { message: '보드에 빈칸이 없어 폭격을 사용할 수 없습니다.' });
+          return;
+        }
+
+        // 3. 빈칸 배열을 무작위로 섞음 (Fisher-Yates 셔플 알고리즘)
+        for (let i = emptySpots.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          const temp = emptySpots[i];
+          emptySpots[i] = emptySpots[j];
+          emptySpots[j] = temp;
+        }
+
+        // 4. 무작위로 섞인 배열에서 앞에서부터 5개 선택
+        const selectedSpots = emptySpots.slice(0, stonesToPlace);
+        const colors: ('black' | 'white')[] = ['black', 'white'];
+
+        // 5. 선택된 위치에 랜덤한 색상의 돌 배치
+        selectedSpots.forEach(spot => {
+          const randomColor = colors[Math.floor(Math.random() * colors.length)];
+          room.board[spot.y][spot.x] = randomColor;
+          console.log(`[Augment - Bombardment] (${spot.x}, ${spot.y}) 위치에 ${randomColor} 돌 배치`);
+        });
       }
       else if (augmentId === 'table_flip') {
         // 모든 돌 위치를 랜덤한 위치로 이동시킵니다.
