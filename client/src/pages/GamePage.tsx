@@ -25,7 +25,7 @@ interface PlayerInfo {
   socketId?: string;
   color: 'black' | 'white';
   isReady?: boolean;
-  augments?: string[];
+  augments?: any[];
 }
 
 const augmentIconMap: Record<string, string> = {
@@ -47,7 +47,7 @@ export const GamePage: React.FC<GamePageProps> = ({
   const [myColor, setMyColor] = useState<'black' | 'white'>('black');
   const [opponent, setOpponent] = useState<PlayerInfo | null>(null);
   const [stones, setStones] = useState<Stone[]>([]);
-  const [myAugments, setMyAugments] = useState<string[]>(['＋', '🌫️']);
+  const [myAugments, setMyAugments] = useState<any[]>([]);
   const [isOverlayHidden, setIsOverlayHidden] = useState<boolean>(false);
   const [gameOverData, setGameOverData] = useState<{
     isOver: boolean;
@@ -57,6 +57,7 @@ export const GamePage: React.FC<GamePageProps> = ({
   } | null>(null);
   const [isAugmentSelecting, setIsAugmentSelecting] = useState<boolean>(false);
   const [augmentOptions, setAugmentOptions] = useState<AugmentOption[]>([]);
+  const [selectedAugmentToUse, setSelectedAugmentToUse] = useState<any | null>(null);
 
   // 서버의 2차원 보드 데이터를 돌 객체 배열로 변환
   const parseBoardToStones = (board: any[][]): Stone[] => {
@@ -265,6 +266,26 @@ export const GamePage: React.FC<GamePageProps> = ({
     socket.emit('game:augment:choose', { roomId, augmentId: selectedId });
   };
 
+  // 인벤토리 내 증강 클릭 시 실행되는 함수
+  const handleAugmentClick = (aug: any) => {
+    if (!aug) return;
+
+    if (currentTurn !== myColor) {
+      alert('자신의 턴에만 증강을 사용할 수 있습니다.');
+      return;
+    }
+
+    setSelectedAugmentToUse(aug);
+  };
+
+  // 모달창에서 사용하기 버튼 클릭 시 실행되는 함수
+  const handleConfirmUseAugment = () => {
+    if (!socket || !selectedAugmentToUse) return;
+
+    socket.emit('game:augment:use', { roomId, augmentId: selectedAugmentToUse.id });
+    setSelectedAugmentToUse(null);
+  };
+
   const nextAugmentTurn = turnCount <= 15 ? 15 : 30;
   const progressPercent = Math.min(100, ((turnCount % 15) / 15) * 100);
 
@@ -338,11 +359,16 @@ export const GamePage: React.FC<GamePageProps> = ({
           <p className="inv-label">🃏 내 증강 (내 턴에 클릭해서 사용)</p>
           <div className="inv-row">
             {[0, 1, 2].map((idx) => {
-              const augId = myAugments[idx];
-              const displayIcon = augId ? augmentIconMap[augId] || '❓' : null;
+              const aug = myAugments[idx];
+              // 서버에서 받은 객체 데이터에서 아이콘 정보를 추출
+              const displayIcon = aug ? (aug.icon || augmentIconMap[aug.id] || '❓') : null;
               
               return (
-                <div key={idx} className={`inv-slot my ${augId ? 'filled' : ''}`}>
+                <div 
+                  key={idx} 
+                  className={`inv-slot my ${aug ? 'filled' : ''}`}
+                  onClick={() => handleAugmentClick(aug)}
+                >
                   {displayIcon ? displayIcon : '＋'}
                 </div>
               );
@@ -439,6 +465,47 @@ export const GamePage: React.FC<GamePageProps> = ({
           options={augmentOptions}
           onSelectComplete={handleAugmentSelected}
         />
+      )}
+
+      {/* 증강 사용 확인 모달 렌더링 영역 */}
+      {selectedAugmentToUse && (
+        <div className="aug-modal-overlay" onClick={() => setSelectedAugmentToUse(null)}>
+          <div className="aug-modal-container" onClick={(e) => e.stopPropagation()}>
+            <p className="aug-modal-title">증강 사용</p>
+
+            <div className="aug-card-item selected" style={{ cursor: 'default', marginBottom: '16px' }}>
+              <div className="aug-icon-box">
+                {selectedAugmentToUse.icon || augmentIconMap[selectedAugmentToUse.id] || '❓'}
+              </div>
+              <div className="aug-info-box">
+                <span className="aug-name">{selectedAugmentToUse.name}</span>
+                <p className="aug-desc">{selectedAugmentToUse.description}</p>
+              </div>
+              {selectedAugmentToUse.rarity && (
+                <span className={`aug-rarity ${String(selectedAugmentToUse.rarity).toLowerCase()}`}>
+                  {selectedAugmentToUse.rarity}
+                </span>
+              )}
+            </div>
+
+            <div className="action-row" style={{ display: 'flex', gap: '8px' }}>
+              <button
+                className="game-btn ghost"
+                style={{ flex: 1, background: '#fffefb', border: '1.5px solid var(--card-border)', color: 'var(--text-main)' }}
+                onClick={() => setSelectedAugmentToUse(null)}
+              >
+                취소
+              </button>
+              <button
+                className="game-btn"
+                style={{ flex: 1, background: 'var(--teal)', color: '#0e3833', border: 'none' }}
+                onClick={handleConfirmUseAugment}
+              >
+                사용하기
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
