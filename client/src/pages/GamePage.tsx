@@ -59,6 +59,7 @@ export const GamePage: React.FC<GamePageProps> = ({
   const [selectedAugmentToUse, setSelectedAugmentToUse] = useState<any | null>(null);
   const [augmentTargetMode, setAugmentTargetMode] = useState<any | null>(null);
   const [sealedCells, setSealedCells] = useState<{ x: number; y: number; turnsRemaining: number }[]>([]);
+  const [myHiddenStones, setMyHiddenStones] = useState<{ x: number; y: number; turnsRemaining: number }[]>([]);
 
   // 서버의 2차원 보드 데이터를 돌 객체 배열로 변환
   const parseBoardToStones = (board: any[][]): Stone[] => {
@@ -188,6 +189,10 @@ export const GamePage: React.FC<GamePageProps> = ({
 
     const handleGameError = (data: { message: string }) => {
       alert(`[오류] ${data.message}`);
+    };
+
+    const handleSystemMessage = (data: { message: string }) => {
+      alert(data.message);
     };
 
     const handleGameOver = (data: any) => {
@@ -408,14 +413,33 @@ export const GamePage: React.FC<GamePageProps> = ({
             // border(7px)와 grid-lines의 오프셋(14px)을 더해 주어야 격자 교차점과 정확히 일치함
             const pixelX = 2 + 14 + stone.x * 22;
             const pixelY = 2 + 14 + stone.y * 22;
+
             // 공백 방지 
+            const isMyHidden = myHiddenStones.some(hs => hs.x === stone.x && hs.y === stone.y);
             const stoneClass = `stone ${stone.color === 'black' ? 'b' : 'w'}${stone.isAugmented ? ' aug' : ''}`;
             return (
               <div
                 key={idx}
                 className={stoneClass}
-                style={{ top: `${pixelY}px`, left: `${pixelX}px` }}
-              ></div>
+                style={{
+                  top: `${pixelY}px`,
+                  left: `${pixelX}px`,
+                  opacity: isMyHidden ? 0.4 : 1, // 내 화면에서는 반투명하게 표시
+                  transition: 'opacity 0.3s'
+                }}
+              >
+                {isMyHidden && (
+                  <span style={{
+                    position: 'absolute',
+                    top: '-8px',
+                    right: '-8px',
+                    fontSize: '12px',
+                    pointerEvents: 'none'
+                  }}>
+                    🥷
+                  </span>
+                )}
+              </div>
             );
           })}
         </div>

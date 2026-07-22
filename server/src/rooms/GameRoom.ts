@@ -24,6 +24,7 @@ export class GameRoom {
   // 증강 선택을 대기 중인 플레이어 이메일 목록
   public pendingAugmentPlayers: Set<string> = new Set();
   public sealedCells: { x: number; y: number; turnsRemaining: number }[] = [];
+  public hiddenStones: { x: number; y: number; email: string; turnsRemaining: number }[] = [];
 
   constructor(roomId: string, roomTitle: string) {
     this.roomId = roomId;
@@ -74,10 +75,11 @@ export class GameRoom {
     this.status = 'waiting';
     this.turnCount = 1;
     this.sealedCells = [];
+    this.hiddenStones = [];
   }
 
   // 착수 검증 및 처리 메서드
-  public putStone(email: string, x: number, y: number): { success: boolean; message?: string; isWin?: boolean; color?: 'black' | 'white' } {
+  public putStone(email: string, x: number, y: number): { success: boolean; message?: string; isWin?: boolean; color?: 'black' | 'white'; hiddenMoveCrushed?: boolean } {
     if (this.status !== 'playing') {
       return { success: false, message: '진행 중인 게임이 아닙니다.' };
     }
@@ -95,6 +97,20 @@ export class GameRoom {
       return { success: false, message: '바둑판 영역을 벗어난 좌표입니다.' };
     }
 
+    let hiddenMoveCrushed = false;
+    const hiddenTargetIndex = this.hiddenStones.findIndex(stone => stone.x === x && stone.y === y && stone.email !== email);
+    
+    // 원래 돌이 있으면서, 그 돌이 상대의 숨겨진 돌이 아닌 경우에만 착수 거부
+    if (this.board[y][x] !== '' && hiddenTargetIndex === -1) {
+      return { success: false, message: '이미 돌이 놓여 있는 자리입니다.' };
+    }
+
+    // 상대의 숨겨진 돌 자리를 클릭했다면, 숨겨진 돌 배열에서 제거하고 덮어씌움
+    if (hiddenTargetIndex !== -1) {
+      this.hiddenStones.splice(hiddenTargetIndex, 1);
+      hiddenMoveCrushed = true;
+    }
+
     if (this.board[y][x] !== '') {
       return { success: false, message: '이미 돌이 놓여 있는 자리입니다.' };
     }
@@ -106,6 +122,14 @@ export class GameRoom {
 
     // 바둑판에 돌 배치
     this.board[y][x] = this.currentTurn;
+
+    const pendingEffectIndex = player.activeEffects.findIndex(e => e.id === 'hidden_move_pending');
+    if (pendingEffectIndex !== -1) {
+        // 상대 턴 1번 진행 후 내 턴이 돌아오기 직전에 풀리도록 turnsRemaining을 2로 설정
+        this.hiddenStones.push({ x, y, email, turnsRemaining: 2 }); 
+        // 효과 제거 (1회성)
+        player.activeEffects.splice(pendingEffectIndex, 1);
+    }
 
     // 승리 조건 검사
     const isWin = this.checkWin(x, y, this.currentTurn);
@@ -120,8 +144,15 @@ export class GameRoom {
 
     this.tickEffects(player.email);
     this.tickSealedCells();
+    this.tickHiddenStones();
 
     return { success: true, isWin: false, color: player.color };
+  }
+
+  public tickHiddenStones(): void {
+    this.hiddenStones = this.hiddenStones
+      .map(stone => ({ ...stone, turnsRemaining: stone.turnsRemaining - 1 }))
+      .filter(stone => stone.turnsRemaining > 0);
   }
 
   public tickSealedCells(): void {

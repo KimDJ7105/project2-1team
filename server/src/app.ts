@@ -40,17 +40,35 @@ function broadcastGameUpdate(io: Server, room: any, extraData: object = {}) {
   const playersArray = Array.from(room.players.values()) as any[];
   // 플레이어 중 한 명이라도 activeEffects가 존재하는지 확인
   const hasActiveEffects = playersArray.some(p => p.activeEffects && p.activeEffects.length > 0);
+  const hasHiddenStones = room.hiddenStones && room.hiddenStones.length > 0;
 
-  if (hasActiveEffects) {
+  if (hasActiveEffects || hasHiddenStones) {
     // 상태이상(특수 효과)이 있는 경우: 각 플레이어마다 맞춤형으로 개별 전송
     for (const player of playersArray) {
-      // 나중에 필요에 따라 player마다 다른 보드나 상태를 필터링할 수 있는 확장 포인트
+      // 1. 원본 보드를 복사
+      const personalizedBoard = room.board.map((row: any) => [...row]);
+
+      // 2. 현재 플레이어의 것이 아닌 숨겨진 돌을 빈칸으로 덮어씀
+      if (hasHiddenStones) {
+        for (const hiddenStone of room.hiddenStones) {
+          if (hiddenStone.email !== player.email) {
+            personalizedBoard[hiddenStone.y][hiddenStone.x] = '';
+          }
+        }
+      }
+
+      // 본인의 숨겨진 돌 위치를 클라이언트에 전달하기 위한 배열 (클라이언트에서 반투명 처리 등 활용 가능)
+      const myHiddenStones = room.hiddenStones
+        ? room.hiddenStones.filter((s: any) => s.email === player.email)
+        : [];
+
       io.to(player.socketId).emit('game:update', {
         currentTurn: room.currentTurn,
         turnCount: room.turnCount,
-        board: room.board,
+        board: personalizedBoard, // 조작된 보드 전송
         players: playersArray,
         sealedCells: room.sealedCells,
+        myHiddenStones, // 본인의 숨겨진 돌 정보 추가
         ...extraData
       });
     }
@@ -466,6 +484,12 @@ io.on('connection', (socket: AuthenticatedSocket) => {
         return;
       }
 
+      if (result.hiddenMoveCrushed) {
+          io.to(roomId).emit('game:system_message', { 
+            message: `💥 쨍그랑! 상대의 숨겨진 돌을 파괴했습니다! 💥` 
+          });
+      }
+
       // 착수 성공 시 방 전체 플레이어에게 게임 상태 브로드캐스트
       broadcastGameUpdate(io, room, { x, y, color: result.color });
       // io.to(roomId).emit('game:update', {
@@ -763,6 +787,11 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       }
       else if (augmentId === 'hidden_move') {
         // 이번 턴에 둔 돌이 1턴 동안 상대에게 안 보입니다.
+        player.activeEffects.push({
+            id: 'hidden_move_pending',
+            turnsRemaining: 1 // 착수 시점에 바로 소모되므로 1로 설정
+        });
+        console.log(`[Hidden Move] ${player.nickname} 님이 숨겨진 한 수 대기 상태가 되었습니다.`);
       }
       else if (augmentId === 'fog_of_war') {
         // 3턴 동안 상대가 자신의 돌과 인접한 칸만 보이도록 합니다.

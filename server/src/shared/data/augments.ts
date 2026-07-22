@@ -33,7 +33,7 @@ export const AUGMENT_LIST: Augment[] = [
   new Augment('coin_flip', '동전 던지기', '자신의 돌 하나를 랜덤한 위치로 이동시킵니다.', 'IMMEDIATE', 'COMMON'),
   new Augment('double_coin', '동전이 두개', '랜덤한 상대 돌과 랜덤한 자신의 돌 위치를 바꿉니다.', 'IMMEDIATE','RARE'),
   new Augment('chaos_party', '대환장 파티', '3턴 동안 모든 돌의 색을 변화시킵니다. ', 'DURATION', 'EPIC'),
-  new Augment('hidden_move', '숨겨진 한 수', '이번 턴에 둔 돌이 1턴 동안 상대에게 안 보입니다.', 'DURATION', 'RARE'),
+  new Augment('hidden_move', '숨겨진 한 수', '이번 턴에 둔 돌이 1턴 동안 상대에게 안 보입니다. 상대가 숨겨진 돌 위치에 착수하면 돌이 파괴됩니다.', 'DURATION', 'RARE'),
   new Augment('fog_of_war', '전장의 안개', '3턴 동안 상대가 자신의 돌과 인접한 칸만 보이도록 합니다.', 'DURATION', 'LEGEND'),
   new Augment('mixer', '믹서', '3x3 칸 내의 바둑알을 무작위로 섞습니다.', 'TARGET_SELECT', 'RARE'),
   new Augment('meteor', '운석 충돌', '3x3 칸 내의 모든 바둑알을 무작위 위치로 이동시킵니다.', 'TARGET_SELECT', 'EPIC'),
