@@ -28,3 +28,37 @@ CREATE TABLE IF NOT EXISTS userState (
     REFERENCES users(userId)
     ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS gameRecord (
+    gameId BIGINT AUTO_INCREMENT PRIMARY KEY,
+
+    blackUserId INT NOT NULL,
+    whiteUserId INT NOT NULL,
+    winnerUserId INT NULL,
+
+    boardState JSON NOT NULL,
+
+    endReason VARCHAR(20) NOT NULL,
+
+    totalTurn BIGINT NOT NULL,
+
+    selectedAugment JSON NULL,
+
+    startedAt DATETIME NOT NULL,
+    endedAt DATETIME NOT NULL,
+
+    CONSTRAINT fk_game_black
+        FOREIGN KEY (blackUserId)
+        REFERENCES users(userId)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_game_white
+        FOREIGN KEY (whiteUserId)
+        REFERENCES users(userId)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_game_winner
+        FOREIGN KEY (winnerUserId)
+        REFERENCES users(userId)
+        ON DELETE SET NULL
+);

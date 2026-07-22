@@ -1,7 +1,8 @@
 // client/src/components/History/HistoryView.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect} from 'react';
 import HistoryDetail from './HistoryDetail';
 import { BottomNav } from '../Game/BottomNav';
+import { getGameRecords } from '../../api/gameRecordApi';
 
 interface HistoryViewProps {
   onBackClick: () => void;
@@ -29,14 +30,22 @@ const badgeLabel: Record<string, string> = {
 
 export default function HistoryView({ onBackClick, onProfileClick }: HistoryViewProps) {
   const [selectedGame, setSelectedGame] = useState<GameRecord | null>(null);
+const [history, setHistory] = useState<GameRecord[]>([]);
+ 
+useEffect(() => {
+  const userId = 1;
 
-  // TODO: 나중에 API 연결되면 이 하드코딩 데이터를 실제 데이터로 교체
-  const history: GameRecord[] = [
-    { id: 1, result: 'win', opponent: '구름(백)', turns: 43 },
-    { id: 2, result: 'lose', opponent: '번개(흑)', turns: 28 },
-    { id: 3, result: 'win', opponent: '오목의 신(백)', turns: 31 },
-    { id: 4, result: 'draw', opponent: '달빛(흑)', turns: 57 },
-  ];
+  getGameRecords(userId)
+    .then((data) => {
+      console.log("전적 데이터:", data);
+      setHistory(data);
+    })
+    .catch((error) => {
+      console.error("전적 조회 실패:", error);
+    });
+
+}, []);
+
 
   if (selectedGame) {
     return (
