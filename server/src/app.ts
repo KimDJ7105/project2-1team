@@ -310,7 +310,10 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       });
 
       if (room.turnCount === 1) {
-        room.triggerAugmentSelection(io);
+        // 클라이언트 화면 전환 시간을 고려해 0.5초 후 증강 선택지 발송
+        setTimeout(() => {
+          room.triggerAugmentSelection(io);
+        }, 500);
       }
     }
   });

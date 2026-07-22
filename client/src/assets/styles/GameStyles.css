@@ -466,3 +466,14 @@
   color: var(--text-sub);
   margin: 0 0 12px 0;
 }
+
+.aug-rarity.epic {
+  background: #f3e8ff;
+  color: #7e22ce;
+}
+
+.aug-rarity.legend {
+  background: #fee2e2;
+  color: #b91c1c;
+  box-shadow: 0 0 6px rgba(220, 38, 38, 0.4);
+}
