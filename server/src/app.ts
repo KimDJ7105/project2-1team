@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from 'express';
 import { initializeDatabase } from './repositories/mysqlClient';
 import { createServer } from 'http';
@@ -11,7 +12,8 @@ import { SCRoomSummary } from './shared/types/game_data';
 import { gameRoomManager } from './rooms/GameRoom';
 import profileRoutes from './routes/profileRoutes';
 import activeConfig from './config/configLoader';
-
+import { userStateRepositoryImpl } from './repositories/mysqlUserStateRepository';
+import { userRepository, userStateRepository } from './repositories';
 const app = express();
 
 // JSON 요청 본문을 해석하기 위한 미들웨어 설정 (필수!)
@@ -433,6 +435,8 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       // 승리 조건이 달성된 경우 게임 종료 이벤트 발송
       if (result.isWin) {
         const winner = Array.from(room.players.values()).find(p => p.color === result.color);
+        const loser = Array.from(room.players.values()).find(p => p.color !== result.color);
+
         // Redis에 방 상태를 'finished'로 갱신하여 저장
         const updatedRoom = {
           roomId: room.roomId,
@@ -447,6 +451,25 @@ io.on('connection', (socket: AuthenticatedSocket) => {
           winnerNickname: winner?.nickname || '알 수 없음',
           message: `${winner?.nickname || result.color} 님이 5목을 완성하여 승리했습니다!`
         });
+
+           // 승자/패자 전적 및 레이팅 DB 반영
+  try {
+    if (winner?.email) {
+      const winnerUser = await userRepository.findByEmail(winner.email);
+      if (winnerUser) {
+        await userStateRepositoryImpl.applyGameResult(winnerUser.userId, 'win', 10);
+      }
+    }
+    if (loser?.email) {
+      const loserUser = await userRepository.findByEmail(loser.email);
+      if (loserUser) {
+        await userStateRepositoryImpl.applyGameResult(loserUser.userId, 'lose', -10);
+      }
+    }
+    console.log(`[전적 반영 완료] 승자: ${winner?.nickname}, 패자: ${loser?.nickname}`);
+  } catch (err) {
+    console.error('전적 반영 중 오류:', err);
+  }
 
         // 로비에 있는 전체 유저들에게 종료된 방이 제외된 목록 전송
         const roomsData = await redisSessionManager.getAllRooms();

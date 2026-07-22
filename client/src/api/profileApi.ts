@@ -44,7 +44,7 @@ export const updateNickname = async (
   nickname: string
 ) => {
 
-  const response = await API.patch(
+  const response = await API.put(
     "/api/profile/nickname",
     {
       userId,

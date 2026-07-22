@@ -15,4 +15,10 @@ export interface UserState {
 
 export interface UserStateRepository {
   findByUserId(userId: number): Promise<UserState | null>;
+   applyGameResult(
+    userId: number,
+    result: 'win' | 'lose' | 'draw',
+    ratingChange: number
+  ): Promise<UserState>;
+
 }
