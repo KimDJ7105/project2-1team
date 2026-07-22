@@ -550,6 +550,73 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     }
   });
 
+  //항복 요청 처리 
+  socket.on('game:surrender', async ({ roomId }) => {
+    try {
+      if (!userEmail) return;
+
+      const room = gameRoomManager.getRoom(roomId);
+      if (!room || room.status !== 'playing') return;
+
+      room.status = 'finished';
+
+      const loser = room.players.get(userEmail);
+      const winner = Array.from(room.players.values()).find(p => p.email !== userEmail);
+
+      // Redis 방 상태를 'finished'로 갱신
+      const updatedRoom = {
+        roomId: room.roomId,
+        roomTitle: room.roomTitle,
+        playerCount: room.players.size,
+        status: 'finished'
+      };
+      await redisSessionManager.saveRoom(roomId, updatedRoom);
+
+      // 방 전체에 항복으로 인한 게임 종료 브로드캐스트
+      io.to(roomId).emit('game:over', {
+        winner: winner?.color || 'black',
+        winnerNickname: winner?.nickname || '상대방',
+        message: `${loser?.nickname || '플레이어'} 님의 항복으로 승리했습니다!`
+      });
+
+      // DB 대국 기록 및 전적 반영
+      try {
+        const blackPlayer = Array.from(room.players.values()).find(p => p.color === 'black');
+        const whitePlayer = Array.from(room.players.values()).find(p => p.color === 'white');
+
+        if (blackPlayer && whitePlayer && winner) {
+          await gameRecordRepositoryImpl.saveGameRecord({
+            blackUserId: blackPlayer.userId,
+            whiteUserId: whitePlayer.userId,
+            winnerUserId: winner.userId,
+            boardState: room.board,
+            endReason: "SURRENDER",
+            totalTurn: room.turnCount
+          });
+
+          await userStateRepositoryImpl.applyGameResult(winner.userId, 'win', 10);
+          if (loser) {
+            await userStateRepositoryImpl.applyGameResult(loser.userId, 'lose', -10);
+          }
+          console.log(`[항복 전적 반영 완료] 승자: ${winner.nickname}, 패자: ${loser?.nickname}`);
+        }
+      } catch (err) {
+        console.error('항복 대국 기록 또는 전적 반영 중 오류:', err);
+      }
+
+      // 로비 방 목록 갱신
+      const roomsData = await redisSessionManager.getAllRooms();
+      const roomList = roomsData
+        .map((roomStr: string) => JSON.parse(roomStr) as SCRoomSummary)
+        .filter((r) => r.status !== 'finished');
+      
+      io.emit('room:list', roomList);
+
+    } catch (err) {
+      console.error('항복 처리 중 오류:', err);
+    }
+  });
+
 });
 
 // 데이터베이스 초기화 및 서버 구동을 위한 비동기 래퍼 함수

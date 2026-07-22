@@ -247,7 +247,6 @@ export const GamePage: React.FC<GamePageProps> = ({
       if (socket) {
         socket.emit('game:surrender', { roomId });
       }
-      onLeave();
     }
   };
 
