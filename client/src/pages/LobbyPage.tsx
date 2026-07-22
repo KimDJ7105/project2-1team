@@ -8,7 +8,8 @@ import type { Socket } from 'socket.io-client';
 import type { Room } from '../hooks/useSocket';
 import ProfileView from '../components/Profile/ProfileView';
 import ProfileEdit from '../components/Profile/ProfileEdit';
-import { getProfile,updateNickname } from '../api/profileApi';
+import HistoryView from '../components/History/HistoryView';
+import { getProfile, updateNickname } from '../api/profileApi';
 
 interface LobbyPageProps {
   socket: Socket | null;
@@ -32,21 +33,23 @@ interface ProfileState {
   winRate: number;
 }
 
+type Screen = 'home' | 'profile' | 'profileEdit' | 'history';
+
 export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout, onJoinSuccess }) => {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
-  const [showProfileEdit, setShowProfileEdit] = useState(false);
+  const [activeScreen, setActiveScreen] = useState<Screen>('home');
   const [profile, setProfile] = useState<ProfileState>({
-  nickname: user.nickname,
-  profileImage: null,
-  totalGames: 0,
-  winCount: 0,
-  loseCount: 0,
-  drawCount: 0,
-  rating: 1200,
-  winRate: 0,
-});
+    nickname: user.nickname,
+    profileImage: null,
+    totalGames: 0,
+    winCount: 0,
+    loseCount: 0,
+    drawCount: 0,
+    rating: 1200,
+    winRate: 0,
+  });
+
   const requestRoomList = useCallback(() => {
     if (socket?.connected) socket.emit('room:list');
   }, [socket]);
@@ -54,17 +57,14 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout, on
   useEffect(() => {
     if (!socket) return;
     socket.on('room:list', (list: Room[]) => setRooms(list));
-    // 소켓이 연결되어있으면 바로 리스트 요청
     if (socket.connected) {
-        requestRoomList();
+      requestRoomList();
     }
-    // 소켓이 연결되면 리스트를 불러오도록 이벤트 등록 
     const handleConnect = () => {
-        requestRoomList();
+      requestRoomList();
     };
     socket.on('connect', handleConnect);
 
-    // 방 입장 이벤트 리스너 
     const handleJoinSuccess = (data: { roomId: string; roomTitle: string }) => {
       setShowCreateModal(false);
       onJoinSuccess(data);
@@ -77,29 +77,25 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout, on
     socket.on('room:join:success', handleJoinSuccess);
     socket.on('room:join:fail', handleJoinFail);
 
-    return () => { socket.off('room:list'); 
+    return () => {
+      socket.off('room:list');
       socket.off('connect', handleConnect);
       socket.off('room:join:success', handleJoinSuccess);
-      socket.off('room:join:fail', handleJoinFail);};
+      socket.off('room:join:fail', handleJoinFail);
+    };
   }, [socket, requestRoomList, onJoinSuccess]);
 
-
-  //프로필 데이터 가져오는 useEffect
   useEffect(() => {
-  const fetchProfile = async () => {
-    try {
+    const fetchProfile = async () => {
+      try {
+        const data = await getProfile(user.userId);
+        setProfile(data);
+      } catch (error) {
+        console.error('프로필 조회 실패:', error);
+      }
+    };
 
-      const data = await getProfile(user.userId);
-
-      setProfile(data);
-
-    } catch(error) {
-      console.error("프로필 조회 실패:", error);
-    }
-  };
-
-  fetchProfile();
-
+    fetchProfile();
   }, [user.userId]);
 
   const handleCreateRoom = () => {
@@ -108,7 +104,6 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout, on
 
   const handleModalCreate = (title: string) => {
     if (title && socket) socket.emit('room:create', { title });
-    //setShowCreateModal(false);
   };
 
   const handleModalClose = () => setShowCreateModal(false);
@@ -116,59 +111,46 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout, on
   const handleJoinRoom = (roomId: string) => {
     if (socket) socket.emit('room:join', { roomId });
   };
-  
-    if (showProfileEdit) {
-  return (
-  <ProfileEdit
-  nickname={profile.nickname}
-  email={user.email}
-  userId={user.userId}
-  onBackClick={() => setShowProfileEdit(false)}
-  onSave={async(newNickname) => {
 
-  try {
-
-    await updateNickname(
-      user.userId,
-      newNickname
+  if (activeScreen === 'profileEdit') {
+    return (
+      <ProfileEdit
+        nickname={profile.nickname}
+        email={user.email}
+        userId={user.userId}
+        onBackClick={() => setActiveScreen('profile')}
+        onSave={async (newNickname) => {
+          try {
+            await updateNickname(user.userId, newNickname);
+            setProfile({ ...profile, nickname: newNickname });
+            setActiveScreen('profile');
+          } catch (error) {
+            console.error('닉네임 변경 실패', error);
+          }
+        }}
+      />
     );
-
-
-    setProfile({
-      ...profile,
-      nickname:newNickname
-    });
-
-
-    setShowProfileEdit(false);
-
-
-  } catch(error){
-
-    console.error(
-      "닉네임 변경 실패",
-      error
-    );
-
   }
 
-}}
+  if (activeScreen === 'profile') {
+    return (
+      <ProfileView
+        profile={profile}
+        onEditClick={() => setActiveScreen('profileEdit')}
+        onBackClick={() => setActiveScreen('home')}
+        onHistoryClick={() => setActiveScreen('history')}
+      />
+    );
+  }
 
-/>
-
-
-  );
-}
-
-    if (showProfile) {
-  return (
-    <ProfileView
-      profile={profile}
-      onEditClick={() => setShowProfileEdit(true)}
-      onBackClick={() => setShowProfile(false)}
-    />
-  );
-}
+  if (activeScreen === 'history') {
+    return (
+      <HistoryView
+        onBackClick={() => setActiveScreen('home')}
+        onProfileClick={() => setActiveScreen('profile')}
+      />
+    );
+  }
 
   return (
     <div className="phone">
@@ -180,7 +162,6 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout, on
               <div style={{ fontWeight: 800, fontSize: '18px', color: 'var(--text-main)' }}>
                 {user.nickname}님
               </div>
-              {/* TODO: 승리 횟수 등 동적 데이터 연동 필요 */}
               <span className="badge" style={{ fontSize: '13px', padding: '4px 10px' }}>🏆 0</span>
             </div>
           </div>
@@ -211,16 +192,16 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout, on
 
         <RoomList rooms={rooms} onJoinRoom={handleJoinRoom} />
       </div>
-      <BottomNav 
-       onProfileClick={() => setShowProfile(true)}
-       />
+      <BottomNav
+        onHistoryClick={() => setActiveScreen('history')}
+        onProfileClick={() => setActiveScreen('profile')}
+      />
       <CreateRoomModal
         visible={showCreateModal}
         defaultName={`${user.nickname}의 방`}
-        onClose={handleModalClose} 
+        onClose={handleModalClose}
         onCreate={handleModalCreate}
       />
-      
     </div>
   );
 };

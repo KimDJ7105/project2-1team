@@ -3,10 +3,14 @@
 import React, { useState } from 'react';
 
 interface BottomNavProps {
+  onHomeClick?: () => void;
+  onHistoryClick?: () => void;
   onProfileClick?: () => void;
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({
+  onHomeClick,
+  onHistoryClick,
   onProfileClick
 }) => {
   const [activeTab, setActiveTab] = useState<string>('home');
@@ -23,21 +27,25 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
       <div
         className={`item ${activeTab === 'home' ? 'active' : ''}`}
-        onClick={() => setActiveTab('home')}
+        onClick={() => {
+          setActiveTab('home');
+          onHomeClick?.();
+        }}
       >
         <span style={{ fontSize: '20px' }}>🏠</span>
         <span style={labelStyle}>홈</span>
       </div>
 
-
       <div
         className={`item ${activeTab === 'history' ? 'active' : ''}`}
-        onClick={() => setActiveTab('history')}
+        onClick={() => {
+          setActiveTab('history');
+          onHistoryClick?.();
+        }}
       >
         <span style={{ fontSize: '20px' }}>📊</span>
         <span style={labelStyle}>전적</span>
       </div>
-
 
       <div
         className={`item ${activeTab === 'codex' ? 'active' : ''}`}
@@ -46,7 +54,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         <span style={{ fontSize: '20px' }}>📖</span>
         <span style={labelStyle}>증강도감</span>
       </div>
-
 
       <div
         className={`item ${activeTab === 'profile' ? 'active' : ''}`}
