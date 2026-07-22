@@ -340,3 +340,129 @@
   justify-content: space-between;
   margin-bottom: 8px;
 }
+
+/* 증강 선택 오버레이 배경 */
+.aug-modal-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+/* 증강 선택 모달 컨테이너 */
+.aug-modal-container {
+  width: 100%;
+  background: #fff7e8;
+  border-radius: 28px;
+  padding: 20px 18px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  max-height: 90%;
+}
+
+.aug-modal-title {
+  font-family: 'Jua', sans-serif;
+  font-size: 20px;
+  text-align: center;
+  margin: 0 0 14px 0;
+  color: var(--text-main);
+}
+
+/* 세로 3개 배치를 위한 리스트 컨테이너 */
+.aug-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+  overflow-y: auto;
+}
+
+/* 개별 증강 카드 (가로형 레이아웃으로 변경하여 세로 3개가 잘 보이도록 함) */
+.aug-card-item {
+  background: #fffefb;
+  border: 2px solid var(--card-border);
+  border-radius: 16px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+.aug-card-item:active {
+  transform: scale(0.98);
+}
+
+.aug-card-item.selected {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px #3ecfc030;
+  background: #f4fffe;
+}
+
+.aug-icon-box {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  background: #fff;
+  border: 1.5px solid var(--card-border);
+  flex-shrink: 0;
+}
+
+.aug-info-box {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.aug-name {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text-main);
+}
+
+.aug-desc {
+  font-size: 12px;
+  color: var(--text-sub);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.aug-rarity {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.aug-rarity.common {
+  background: #e5e0d3;
+  color: var(--text-sub);
+}
+
+.aug-rarity.rare {
+  background: #cfeeeb;
+  color: var(--teal-dark);
+}
+
+.aug-hint {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-sub);
+  margin: 0 0 12px 0;
+}

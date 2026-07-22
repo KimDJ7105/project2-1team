@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Socket } from 'socket.io-client';
 import '../assets/styles/GameStyles.css';
+import { AugmentSelectModal, type AugmentOption } from '../components/Game/AugmentSelectModal';
 
 interface GamePageProps {
   socket: Socket | null;
@@ -45,6 +46,8 @@ export const GamePage: React.FC<GamePageProps> = ({
     winnerNickname?: string;
     isMeWinner?: boolean;
   } | null>(null);
+  const [isAugmentSelecting, setIsAugmentSelecting] = useState<boolean>(false);
+  const [augmentOptions, setAugmentOptions] = useState<AugmentOption[]>([]);
 
   // 서버의 2차원 보드 데이터를 돌 객체 배열로 변환
   const parseBoardToStones = (board: any[][]): Stone[] => {
@@ -144,6 +147,15 @@ export const GamePage: React.FC<GamePageProps> = ({
       }
     };
 
+    // 서버에서 증강 선택하라고 신호를 보낼 때
+    const handleAugmentSelectRequest = (data: { options: AugmentOption[] }) => {
+      console.log('[GamePage] 증강 선택 요청 수신:', data.options);
+      if (data && Array.isArray(data.options)) {
+        setAugmentOptions(data.options);
+        setIsAugmentSelecting(true);
+      }
+    };
+
     const handleGameError = (data: { message: string }) => {
       alert(`[오류] ${data.message}`);
     };
@@ -217,10 +229,19 @@ export const GamePage: React.FC<GamePageProps> = ({
   };
 
   const handleLeaveToMain = () => {
-    if (socket && roomId) {
-      socket.emit('room:leave', { roomId }); // 서버로 퇴장 신호 전송
-    }
-    onLeave(); // 기존 로비 이동 함수 실행
+      if (socket && roomId) {
+        socket.emit('room:leave', { roomId }); // 서버로 퇴장 신호 전송
+      }
+      onLeave(); // 기존 로비 이동 함수 실행
+  };
+
+  // 사용자가 모달에서 증강 선택을 완료했을 때 실행되는 함수
+  const handleAugmentSelected = (selectedId: string) => {
+    if (!socket) return;
+    console.log('[GamePage] 증강 선택 완료, 서버로 전송:', selectedId);
+    
+    socket.emit('game:augment:choose', { roomId, augmentId: selectedId });
+    setIsAugmentSelecting(false);
   };
 
   const nextAugmentTurn = turnCount <= 15 ? 15 : 30;
@@ -388,6 +409,13 @@ export const GamePage: React.FC<GamePageProps> = ({
             </button>
           </div>
         </div>
+      )}
+      {/* 증강 선택 모달 오버레이 렌더링 */}
+      {isAugmentSelecting && (
+        <AugmentSelectModal
+          options={augmentOptions}
+          onSelectComplete={handleAugmentSelected}
+        />
       )}
     </div>
   );
