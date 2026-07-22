@@ -308,6 +308,10 @@ io.on('connection', (socket: AuthenticatedSocket) => {
         board: room.board,
         players: Array.from(room.players.values()) 
       });
+
+      if (room.turnCount === 1) {
+        room.triggerAugmentSelection(io);
+      }
     }
   });
 
@@ -452,9 +456,47 @@ io.on('connection', (socket: AuthenticatedSocket) => {
         
         io.emit('room:list', roomList);
       }
+      else if ((room.turnCount === 15 || room.turnCount === 30)) {
+        //승리하지 않았고 15턴 혹은 30턴이 된 경우 
+        room.triggerAugmentSelection(io);
+      }
+
     } catch (err) {
       console.error('착수 처리 중 오류:', err);
       socket.emit('game:error', { message: '착수 처리 중 서버 오류가 발생했습니다.' });
+    }
+  });
+  
+  // 증강 선택 수신 이벤트 핸들러 추가
+  socket.on('game:augment:choose', async ({ roomId, augmentId }: { roomId: string; augmentId: string }) => {
+    try {
+      const room = gameRoomManager.getRoom(roomId);
+      if (!room || !userEmail) return;
+
+      const player = room.players.get(userEmail);
+      if (player) {
+        // 중복 획득 방지 후 추가
+        if (!player.augments.includes(augmentId)) {
+          player.augments.push(augmentId);
+        }
+        // 대기 명단에서 제외
+        room.pendingAugmentPlayers.delete(userEmail);
+        console.log(`[Augment] ${player.nickname} 증강 획득: ${augmentId}`);
+      }
+
+      // 방의 모든 플레이어가 선택을 마쳤는지 확인
+      if (room.pendingAugmentPlayers.size === 0) {
+        // 선택 완료된 상태를 방 전체에 동기화
+        io.to(roomId).emit('game:update', {
+          currentTurn: room.currentTurn,
+          turnCount: room.turnCount,
+          board: room.board,
+          players: Array.from(room.players.values())
+        });
+        console.log(`[Augment] 방(${roomId}) 모든 인원 증강 선택 완료. 게임 진행 동기화.`);
+      }
+    } catch (err) {
+      console.error('증강 선택 처리 중 오류:', err);
     }
   });
 

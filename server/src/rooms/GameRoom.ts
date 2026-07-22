@@ -1,11 +1,14 @@
 // server/src/rooms/GameRoom.ts
 
+import { AUGMENT_LIST } from '../shared/data/augments';
+
 export interface Player {
   email: string;
   nickname: string;
   socketId: string;
   color: 'black' | 'white';
   isReady: boolean;
+  augments: string[];
 }
 
 export class GameRoom {
@@ -16,6 +19,8 @@ export class GameRoom {
   public currentTurn: 'black' | 'white' = 'black';
   public status: 'waiting' | 'playing' | 'finished' = 'waiting';
   public turnCount: number = 1;
+  // 증강 선택을 대기 중인 플레이어 이메일 목록
+  public pendingAugmentPlayers: Set<string> = new Set();
 
   constructor(roomId: string, roomTitle: string) {
     this.roomId = roomId;
@@ -37,8 +42,7 @@ export class GameRoom {
       return false;
     }
 
-    // 첫 번째 유저는 흑돌, 두 번째 유저는 백돌 지정
-    // todo. 게임 시작 전 선택 하게 하거나 랜덤으로 돌리기
+    // 임시로 첫 번째 유저는 흑돌, 두 번째 유저는 백돌 지정
     const color = this.players.size === 0 ? 'black' : 'white';
     
     this.players.set(email, {
@@ -46,7 +50,8 @@ export class GameRoom {
       nickname,
       socketId,
       color,
-      isReady: false
+      isReady: false,
+      augments: []
     });
 
     return true;
@@ -142,6 +147,28 @@ export class GameRoom {
     }
 
     return false;
+  }
+
+  public triggerAugmentSelection(io: any): void {
+    this.pendingAugmentPlayers.clear();
+
+    for (const player of this.players.values()) {
+      this.pendingAugmentPlayers.add(player.email);
+
+      // 본인이 이미 가진 증강은 제외
+      const availableAugments = AUGMENT_LIST.filter(
+        (aug) => !player.augments.includes(aug.id)
+      );
+
+      // 무작위로 섞어서 3개 추출
+      const shuffled = [...availableAugments].sort(() => Math.random() - 0.5);
+      const selectedOptions = shuffled.slice(0, 3);
+
+      // 개별 소켓으로 증강 선택지 3개 발송
+      io.to(player.socketId).emit('game:augment:select', {
+        options: selectedOptions,
+      });
+    }
   }
 }
 
