@@ -433,7 +433,8 @@ io.on('connection', (socket: AuthenticatedSocket) => {
         color: result.color,
         currentTurn: room.currentTurn,
         turnCount: room.turnCount,
-        board: room.board
+        board: room.board,
+        players: Array.from(room.players.values())
       });
 
       // 승리 조건이 달성된 경우 게임 종료 이벤트 발송
@@ -504,6 +505,11 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       if (player) {
         // 클라이언트가 보낸 ID로 전체 증강 객체 데이터 조회
         const augmentData = AUGMENT_MAP.get(augmentId);
+        // 중복 획득 방지 후 전체 객체 상태로 추가
+        if (augmentData && !player.augments.some((a) => a.id === augmentId)) {
+          player.augments.push(augmentData);
+        }
+
         // 대기 명단에서 제외
         room.pendingAugmentPlayers.delete(userEmail);
         console.log(`[Augment] ${player.nickname} 증강 획득: ${augmentId}`);
