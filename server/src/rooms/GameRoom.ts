@@ -24,7 +24,7 @@ export class GameRoom {
   public status: 'waiting' | 'playing' | 'finished' = 'waiting';
   public turnCount: number = 1;
   // 증강 선택을 대기 중인 플레이어 이메일 목록
-  public pendingAugmentPlayers: Set<string> = new Set();
+  public pendingAugmentPlayers: string[] = [];
   public pendingAugmentOptions: Map<string, any[]> = new Map();
   public sealedCells: { x: number; y: number; turnsRemaining: number }[] = [];
   public hiddenStones: { x: number; y: number; email: string; turnsRemaining: number }[] = [];
@@ -40,7 +40,7 @@ export class GameRoom {
       this.currentTurn = data.currentTurn || 'black';
       this.status = data.status || 'waiting';
       this.turnCount = data.turnCount || 1;
-      this.pendingAugmentPlayers = new Set(data.pendingAugmentPlayers || []);
+      this.pendingAugmentPlayers = data.pendingAugmentPlayers || [];
       this.pendingAugmentOptions = new Map(Object.entries(data.pendingAugmentOptions || {}));
       this.sealedCells = data.sealedCells || [];
       this.hiddenStones = data.hiddenStones || [];
@@ -226,11 +226,11 @@ export class GameRoom {
   }
 
   public triggerAugmentSelection(io: any): void {
-    this.pendingAugmentPlayers.clear();
+    this.pendingAugmentPlayers = [];
     this.pendingAugmentOptions.clear();
 
     for (const player of this.players.values()) {
-      this.pendingAugmentPlayers.add(player.email);
+      this.pendingAugmentPlayers.push(player.email);
 
       // 본인이 이미 가진 증강은 객체의 id를 기준으로 비교하여 제외
       const availableAugments = AUGMENT_LIST.filter(
@@ -249,6 +249,12 @@ export class GameRoom {
         options: selectedOptions,
       });
     }
+
+    console.log(`[Augment Trigger] 방 ID: ${this.roomId}, 현재 등록된 플레이어 수: ${this.players.size}명, 대기 명단:`, this.pendingAugmentPlayers);
+
+    gameRoomManager.saveRoom(this).catch(err => {
+      console.error('증강 트리거 상태 Redis 저장 오류:', err);
+    });
   }
 
   // 턴이 종료될 때 해당 플레이어의 지속 효과 턴 수를 차감, 만료된 효과를 제거

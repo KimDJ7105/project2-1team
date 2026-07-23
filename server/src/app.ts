@@ -662,7 +662,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       broadcastGameUpdate(io, room, { status: room.status });
 
       // 증강 선택 대기 중인 유저가 동기화를 요청한 경우 선택지 재전송
-      if (userEmail && room.pendingAugmentPlayers.has(userEmail)) {
+      if (userEmail && room.pendingAugmentPlayers.includes(userEmail)) {
         const options = room.pendingAugmentOptions.get(userEmail);
         if (options) {
           socket.emit('game:augment:select', { options });
@@ -792,6 +792,8 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       const room = await gameRoomManager.getRoom(roomId);
       if (!room || !userEmail) return;
 
+      console.log(`[Augment Choose] 요청 유저: ${userEmail}, 선택 전 대기 명단:`, room.pendingAugmentPlayers, `전체 플레이어 수: ${room.players.size}`);
+
       const player = room.players.get(userEmail);
       if (player) {
         // 클라이언트가 보낸 ID로 전체 증강 객체 데이터 조회
@@ -805,7 +807,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
         }
 
         // 대기 명단에서 제외
-        room.pendingAugmentPlayers.delete(userEmail);
+        room.pendingAugmentPlayers = room.pendingAugmentPlayers.filter(email => email !== userEmail);
         console.log(`[Augment] ${player.nickname} 증강 획득: ${augmentId}`);
       }
 
@@ -813,11 +815,10 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       await gameRoomManager.saveRoom(room);
 
       // 방의 모든 플레이어가 선택을 마쳤는지 확인
-      if (room.pendingAugmentPlayers.size === 0) {
+      if (room.pendingAugmentPlayers.length === 0 && room.players.size > 0) {
         // 선택 완료된 상태를 방 전체에 동기화
-        broadcastGameUpdate(io, room)
-
-        console.log(`[Augment] 방(${roomId}) 모든 인원 증강 선택 완료. 게임 진행 동기화.`);
+        broadcastGameUpdate(io, room);
+        console.log(`[Augment] 방(${roomId}) 모든 인원(${room.players.size}명) 증강 선택 완료. 게임 진행 동기화.`);
       }
     } catch (err) {
       console.error('증강 선택 처리 중 오류:', err);
