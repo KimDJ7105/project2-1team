@@ -18,8 +18,6 @@ export class MysqlGameRecordRepository implements GameRecordRepository {
     SELECT
       g.gameId,
 
-      g.roomTitle,
-
       CASE
         WHEN g.winnerUserId IS NULL THEN 'draw'
         WHEN g.winnerUserId = ? THEN 'win'
@@ -113,14 +111,16 @@ export class MysqlGameRecordRepository implements GameRecordRepository {
 
 // 게임 종료 기록 저장
 async saveGameRecord(data: {
-  roomTitle: string;
   blackUserId: number;
   whiteUserId: number;
   winnerUserId: number | null;
   boardState: string[][];
   endReason: string;
   totalTurn: number;
-  selectedAugment?: { black: string[]; white: string[] };
+  selectedAugment?: {
+    black: string[];
+    white: string[];
+  };
 }): Promise<void> {
 
   const pool = getDbPool();
@@ -128,7 +128,6 @@ async saveGameRecord(data: {
   const query = `
     INSERT INTO gameRecord
     (
-      roomTitle,
       blackUserId,
       whiteUserId,
       winnerUserId,
@@ -139,18 +138,17 @@ async saveGameRecord(data: {
       startedAt,
       endedAt
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+    VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
   `;
 
   await pool.query(query, [
-    data.roomTitle,
     data.blackUserId,
     data.whiteUserId,
     data.winnerUserId,
     JSON.stringify(data.boardState),
     data.endReason,
     data.totalTurn,
-    JSON.stringify(data.selectedAugment ?? { black: [], white: [] })
+    JSON.stringify(data.selectedAugment ?? null),
   ]);
 }
 
