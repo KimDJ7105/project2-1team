@@ -48,16 +48,52 @@ function broadcastGameUpdate(io: Server, room: any, extraData: object = {}) {
       // 1. 원본 보드를 복사
       const personalizedBoard = room.board.map((row: any) => [...row]);
 
-      // 2. 현재 플레이어의 것이 아닌 숨겨진 돌을 빈칸으로 덮어씀
-      if (hasHiddenStones) {
-        for (const hiddenStone of room.hiddenStones) {
-          if (hiddenStone.email !== player.email) {
-            personalizedBoard[hiddenStone.y][hiddenStone.x] = '';
+      // [전장의 안개] 효과 적용
+      const hasFog = player.activeEffects?.some((e: any) => e.id === 'fog_of_war');
+      if (hasFog) {
+        const myColor = player.color;
+        // 시야 확보 여부를 체크할 마스크 배열
+        const visibleMask = Array(15).fill(null).map(() => Array(15).fill(false));
+        const directions = [[0, 0], [-1, 0], [1, 0], [0, -1], [0, 1]]; // 내 돌과 상하좌우 4방향
+
+        // 내 돌을 찾아 시야 마스크 활성화
+        for (let y = 0; y < 15; y++) {
+          for (let x = 0; x < 15; x++) {
+            if (room.board[y][x] === myColor) {
+              for (const [dy, dx] of directions) {
+                const ny = y + dy;
+                const nx = x + dx;
+                if (ny >= 0 && ny < 15 && nx >= 0 && nx < 15) {
+                  visibleMask[ny][nx] = true;
+                }
+              }
+            }
+          }
+        }
+
+        // 시야가 닿지 않는 곳을 fog 처리
+        for (let y = 0; y < 15; y++) {
+          for (let x = 0; x < 15; x++) {
+            if (!visibleMask[y][x]) {
+              personalizedBoard[y][x] = 'fog'; // 클라이언트에서 이 문자열을 받아 안개 그래픽 렌더링
+            }
           }
         }
       }
 
-      // 본인의 숨겨진 돌 위치를 클라이언트에 전달하기 위한 배열 (클라이언트에서 반투명 처리 등 활용 가능)
+      // [숨겨진 돌] 처리
+      if (hasHiddenStones) {
+        for (const hiddenStone of room.hiddenStones) {
+          if (hiddenStone.email !== player.email) {
+            // 전장의 안개로 이미 가려진 칸은 덮어쓸 필요 없음
+            if (personalizedBoard[hiddenStone.y][hiddenStone.x] !== 'fog') {
+              personalizedBoard[hiddenStone.y][hiddenStone.x] = '';
+            }
+          }
+        }
+      }
+
+      // 본인의 숨겨진 돌 위치를 클라이언트에 전달하기 위한 배열
       const myHiddenStones = room.hiddenStones
         ? room.hiddenStones.filter((s: any) => s.email === player.email)
         : [];
@@ -65,10 +101,10 @@ function broadcastGameUpdate(io: Server, room: any, extraData: object = {}) {
       io.to(player.socketId).emit('game:update', {
         currentTurn: room.currentTurn,
         turnCount: room.turnCount,
-        board: personalizedBoard, // 조작된 보드 전송
+        board: personalizedBoard,
         players: playersArray,
         sealedCells: room.sealedCells,
-        myHiddenStones, // 본인의 숨겨진 돌 정보 추가
+        myHiddenStones,
         ...extraData
       });
     }

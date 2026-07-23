@@ -15,7 +15,7 @@ interface GamePageProps {
 interface Stone {
   x: number;
   y: number;
-  color: 'black' | 'white';
+  color: 'black' | 'white' | 'fog';
   isAugmented?: boolean;
 }
 
@@ -70,10 +70,13 @@ export const GamePage: React.FC<GamePageProps> = ({
 
     const newStones: Stone[] = [];
     for (let y = 0; y < 15; y++) {
-      for (let x = 0; x < 15; x++) {
-        const val = board[y]?.[x];
-        // 빈칸이 아니며 유효한 값이 존재할 경우 전부 돌로 인식하여 강제 렌더링
-        if (val && val !== '') {
+    for (let x = 0; x < 15; x++) {
+      const val = board[y]?.[x];
+      // 빈칸이 아니며 유효한 값이 존재할 경우 전부 렌더링 대상으로 인식
+      if (val && val !== '') {
+        if (val === 'fog') {
+          newStones.push({ x, y, color: 'fog' });
+        } else {
           const colorStr = String(val).toLowerCase();
           const color: 'black' | 'white' = 
             colorStr.includes('w') || colorStr.includes('white') ? 'white' : 'black';
@@ -82,6 +85,7 @@ export const GamePage: React.FC<GamePageProps> = ({
         }
       }
     }
+  }
     //console.log('[디버깅] 파싱된 돌 목록:', newStones);
     return newStones;
   };
@@ -415,6 +419,22 @@ export const GamePage: React.FC<GamePageProps> = ({
             // border(7px)와 grid-lines의 오프셋(14px)을 더해 주어야 격자 교차점과 정확히 일치함
             const pixelX = 2 + 14 + stone.x * 22;
             const pixelY = 2 + 14 + stone.y * 22;
+
+            if (stone.color === 'fog') {
+              return (
+                <div
+                  key={`fog-${idx}`}
+                  className="stone fog-tile"
+                  style={{
+                    position: 'absolute',
+                    top: `${pixelY}px`,
+                    left: `${pixelX}px`,
+                  }}
+                >
+                  🌫️
+                </div>
+              );
+            }
 
             // 공백 방지 
             const isMyHidden = myHiddenStones.some(hs => hs.x === stone.x && hs.y === stone.y);
