@@ -272,7 +272,7 @@ export const GamePage: React.FC<GamePageProps> = ({
       return;
     }
 
-    if (stones.some((s) => s.x === x && s.y === y)) {
+    if (stones.some((s) => s.x === x && s.y === y && s.color !== 'fog')) {
       return;
     }
 
