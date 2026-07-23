@@ -8,6 +8,7 @@ export interface AuthenticatedSocket extends Socket {
     userId: number;
     email: string;
     nickname: string;
+    profileImage?: string | null;
   };
 }
 
@@ -35,6 +36,7 @@ export const socketAuthMiddleware = async (
       userId: session.userId,
       email: session.email, // createSession 호출 시 넣어준 email
       nickname: session.nickname,
+      profileImage: session.profileImage ?? null,
     };
 
     // 활동 중이므로 세션 시간 연장

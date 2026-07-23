@@ -11,6 +11,7 @@ import { redisSessionManager } from './sessions/redisSessionManager';
 import { SCRoomSummary } from './shared/types/game_data';
 import { gameRoomManager } from './rooms/GameRoom';
 import profileRoutes from './routes/profileRoutes';
+import { s3Service } from './services/s3Service';
 import activeConfig from './config/configLoader';
 import { userStateRepositoryImpl } from './repositories/mysqlUserStateRepository';
 import { userRepository, userStateRepository } from './repositories';
@@ -147,6 +148,70 @@ io.on('connection', (socket: AuthenticatedSocket) => {
   const userEmail = socket.user?.email;
   const userNickname = socket.user?.nickname;
 
+  // Helper: fetch latest session for this socket (nickname/profileImage), update socket.user
+  const fetchLatestSession = async () => {
+    try {
+      const token = socket.handshake.auth?.token;
+      if (!token || typeof token !== 'string') {
+        return {
+          nickname: socket.user?.nickname ?? userNickname ?? '',
+          profileImage: socket.user?.profileImage ?? null,
+        };
+      }
+
+      // 1) 먼저 Redis에 저장된 세션을 확인
+      const session = await redisSessionManager.getSession(String(token));
+
+      // 2) DB에서 최신 유저 정보를 가져옴
+      let dbUser = null;
+      try {
+        dbUser = await userRepository.findById(userId);
+      } catch (err) {
+        console.warn('DB 사용자 조회 실패:', (err as any)?.message ?? err);
+      }
+
+      // 3) DB에서 얻은 profileImage 키를 presigned URL로 변환(항상 우선)
+      let signedProfile: string | null = null;
+      try {
+        const profileKey = dbUser?.profileImage ?? session?.profileImage ?? socket.user?.profileImage ?? null;
+        signedProfile = await s3Service.getProfilePresignedGetUrl(profileKey ?? null);
+      } catch (err) {
+        console.warn('프로필 presign 변환 실패:', (err as any)?.message ?? err);
+      }
+
+      // 최신 nickname: DB 우선, 없으면 세션
+      const latestNickname = dbUser?.nickname ?? session?.nickname ?? socket.user?.nickname ?? userNickname ?? '';
+
+      // 4) Redis 세션을 최신화하여 nickname/profileImage를 보장
+      try {
+        await redisSessionManager.updateSession(String(token), {
+          nickname: latestNickname,
+          profileImage: signedProfile,
+        });
+      } catch (err) {
+        console.warn('세션 업데이트 실패:', (err as any)?.message ?? err);
+      }
+
+      // 5) socket.user 업데이트
+      socket.user = {
+        userId: session?.userId ?? socket.user?.userId,
+        email: session?.email ?? socket.user?.email,
+        nickname: latestNickname,
+        profileImage: signedProfile ?? socket.user?.profileImage ?? null,
+      } as any;
+
+      return {
+        nickname: latestNickname,
+        profileImage: signedProfile ?? socket.user?.profileImage ?? null,
+      };
+    } catch (err) {
+      return {
+        nickname: socket.user?.nickname ?? userNickname ?? '',
+        profileImage: socket.user?.profileImage ?? null,
+      };
+    }
+  };
+
   console.log(`[Server] 유저 ${userNickname}(${userEmail}) 님이 무전기 채널에 접속했습니다! (소켓 ID: ${socket.id})`);
   
   // 새로고침 등으로 5초 이내에 재연결된 경우 타이머 취소
@@ -263,9 +328,15 @@ io.on('connection', (socket: AuthenticatedSocket) => {
 
     // 메모리에 룸 인스턴스 생성 및 생성자 참가 처리
     const roomInstance = gameRoomManager.createRoom(roomId, titleValue);
-    if (userEmail && userNickname) {
+    if (userEmail) {
       console.log('서버: 방 생성 성공 이벤트 발송 테스트', roomId);
-      roomInstance.addPlayer(userId, userEmail, userNickname, socket.id);
+      try {
+        const latest = await fetchLatestSession();
+        roomInstance.addPlayer(userId, userEmail, (latest.nickname ?? userEmail ?? ''), socket.id, latest.profileImage ?? null);
+      } catch (err) {
+        roomInstance.addPlayer(userId, userEmail, (socket.user?.nickname ?? userNickname ?? userEmail ?? ''), socket.id, socket.user?.profileImage ?? null);
+      }
+
       socket.join(roomId); // Socket.io 룸 채널 입장
     }
 
@@ -281,6 +352,10 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       roomId: roomId, 
       roomTitle: titleValue 
     });
+    {
+      const playersForLog = Array.from(roomInstance.players.values()).map((p: any) => ({ email: p.email, nickname: p.nickname, hasProfileImage: Boolean(p.profileImage) }));
+      console.debug('[room:update] players:', playersForLog);
+    }
     io.to(roomId).emit('room:update', { players: Array.from(roomInstance.players.values()) });
 
     // Redis에 방 데이터 저장
@@ -316,7 +391,14 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       }
 
       // 2. 룸 인스턴스에 플레이어 추가 시도 (인원 초과 시 false 반환)
-      const success = roomInstance.addPlayer(userId, userEmail, userNickname, socket.id);
+      // 최신 세션을 다시 조회하여 nickname/profileImage를 재확인
+      let success = false;
+      try {
+        const latest = await fetchLatestSession();
+        success = roomInstance.addPlayer(userId, userEmail, (latest.nickname ?? userEmail ?? ''), socket.id, latest.profileImage ?? null);
+      } catch (err) {
+        success = roomInstance.addPlayer(userId, userEmail, (socket.user?.nickname ?? userNickname ?? userEmail ?? ''), socket.id, socket.user?.profileImage ?? null);
+      }
       if (!success) {
         socket.emit('room:join:fail', { message: '방 인원이 가득 찼습니다.' });
         return;
@@ -339,6 +421,10 @@ io.on('connection', (socket: AuthenticatedSocket) => {
         roomId: roomInstance.roomId, 
         roomTitle: roomInstance.roomTitle 
       });
+      {
+        const playersForLog = Array.from(roomInstance.players.values()).map((p: any) => ({ email: p.email, nickname: p.nickname, hasProfileImage: Boolean(p.profileImage) }));
+        console.debug('[room:update] players:', playersForLog);
+      }
       io.to(roomId).emit('room:update', { players: Array.from(roomInstance.players.values()) });
     
       // 6. 전체 로비 유저들에게 변경된 인원수 반영을 위해 방 목록 다시 전송
@@ -368,6 +454,10 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     }
 
     // 방에 있는 모든 사람에게 현재 인원 및 준비 상태 브로드캐스트
+    {
+      const playersForLog = Array.from(room.players.values()).map((p: any) => ({ email: p.email, nickname: p.nickname, hasProfileImage: Boolean(p.profileImage) }));
+      console.debug('[room:update] players:', playersForLog);
+    }
     io.to(roomId).emit('room:update', { players: Array.from(room.players.values()) });
 
     // 2명이 모두 모였고, 2명 모두 준비 완료 상태인지 확인 (size와 every 사용)
@@ -421,6 +511,8 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     // 남은 사람들에게 인원 변경 알림
     const room = gameRoomManager.getRoom(roomId);
     if (room) {
+      const playersForLog = Array.from(room.players.values()).map((p: any) => ({ email: p.email, nickname: p.nickname, hasProfileImage: Boolean(p.profileImage) }));
+      console.debug('[room:update] players:', playersForLog);
       io.to(roomId).emit('room:update', { players: Array.from(room.players.values()) });
       
       const updatedRoom = {
@@ -444,26 +536,31 @@ io.on('connection', (socket: AuthenticatedSocket) => {
   });
 
   //방 정보 동기화 요청 
-  socket.on('room:get', ({ roomId }: { roomId: string }) => {
+  socket.on('room:get', async ({ roomId }: { roomId: string }) => {
     try {
       const roomInstance = gameRoomManager.getRoom(roomId);
-      
+
       // 방이 존재하지 않거나 플레이어 정보가 비어있는 경우
       if (!roomInstance || roomInstance.players.size === 0) {
         socket.emit('room:not_found', { message: '존재하지 않거나 삭제된 방입니다.' });
         return;
       }
 
-      if (userEmail && userNickname) {
-        // 새로고침으로 인해 바뀐 새로운 socket.id로 유저 정보를 갱신
-        roomInstance.addPlayer(userId, userEmail, userNickname, socket.id);
+      if (userEmail) {
+        // 새로고침으로 인해 바뀐 새로운 socket.id로 유저 정보를 갱신 (최신 세션 사용)
+        try {
+          const latest = await fetchLatestSession();
+          roomInstance.addPlayer(userId, userEmail, (latest.nickname ?? userEmail ?? ''), socket.id, latest.profileImage ?? null);
+        } catch (err) {
+          roomInstance.addPlayer(userId, userEmail, (socket.user?.nickname ?? userNickname ?? userEmail ?? ''), socket.id, socket.user?.profileImage ?? null);
+        }
         socket.join(roomId);
 
         // 방 전체에 갱신된 플레이어 목록 브로드캐스트
-        io.to(roomId).emit('room:update', { 
-          players: Array.from(roomInstance.players.values()) 
+        io.to(roomId).emit('room:update', {
+          players: Array.from(roomInstance.players.values())
         });
-        console.log(`[Room] ${userNickname} 님의 재접속(새로고침)으로 방(${roomId}) 소켓 ID를 갱신하고 동기화했습니다.`);
+        console.log(`[Room] ${socket.user?.nickname ?? userNickname} 님의 재접속(새로고침)으로 방(${roomId}) 소켓 ID를 갱신하고 동기화했습니다.`);
       }
     } catch (err) {
       console.error('방 정보 조회 오류:', err);
@@ -471,17 +568,26 @@ io.on('connection', (socket: AuthenticatedSocket) => {
   });
 
   // 보드 상태 동기화 요청 
-  socket.on('game:sync', ({ roomId }: { roomId: string }) => {
+  socket.on('game:sync', async ({ roomId }: { roomId: string }) => {
     try {
       const room = gameRoomManager.getRoom(roomId);
       if (!room) return;
 
-      // 새로고침이나 화면 전환 시 소켓 ID 갱신
-      if (userEmail && userNickname) {
-        room.addPlayer(userId, userEmail, userNickname, socket.id);
+      // 새로고침이나 화면 전환 시 소켓 ID 갱신 (최신 세션 사용)
+      if (userEmail) {
+        try {
+          const latest = await fetchLatestSession();
+          room.addPlayer(userId, userEmail, (latest.nickname ?? userEmail ?? ''), socket.id, latest.profileImage ?? null);
+        } catch (err) {
+          room.addPlayer(userId, userEmail, (socket.user?.nickname ?? userNickname ?? userEmail ?? ''), socket.id, socket.user?.profileImage ?? null);
+        }
         socket.join(roomId);
       }
 
+      {
+        const playersForLog = Array.from(room.players.values()).map((p: any) => ({ email: p.email, nickname: p.nickname, hasProfileImage: Boolean(p.profileImage) }));
+        console.debug('[game:sync:response] players:', playersForLog);
+      }
       socket.emit('game:sync:response', {
         roomId: room.roomId,
         status: room.status,
@@ -491,7 +597,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
         players: Array.from(room.players.values()),
         sealedCells: room.sealedCells,
       });
-      console.log(`[GameSync] ${userNickname} 님의 게임 상태 동기화 완료 (방 ID: ${roomId})`);
+      console.log(`[GameSync] ${socket.user?.nickname ?? userNickname} 님의 게임 상태 동기화 완료 (방 ID: ${roomId})`);
     } catch (err) {
       console.error('game:sync 처리 에러:', err);
     }

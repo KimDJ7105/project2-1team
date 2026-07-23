@@ -6,6 +6,7 @@ export interface Player {
   userId: number;
   email: string;
   nickname: string;
+  profileImage?: string | null;
   socketId: string;
   color: 'black' | 'white';
   isReady: boolean;
@@ -34,11 +35,17 @@ export class GameRoom {
   }
 
   // 플레이어 참가
-  public addPlayer(userId: number, email: string, nickname: string, socketId: string): boolean {
+  public addPlayer(userId: number, email: string, nickname: string, socketId: string, profileImage?: string | null): boolean {
     if (this.players.has(email)) {
-      // 이미 참가 중인 경우 소켓 ID만 갱신
+      // 이미 참가 중인 경우 소켓 ID와 변경된 필드만 갱신 (null/undefined로 기존값 덮어쓰기 금지)
       const player = this.players.get(email)!;
       player.socketId = socketId;
+      if (nickname && nickname !== player.nickname) {
+        player.nickname = nickname;
+      }
+      if (profileImage) {
+        player.profileImage = profileImage;
+      }
       return true;
     }
 
@@ -54,6 +61,7 @@ export class GameRoom {
       userId,
       email,
       nickname,
+      profileImage: profileImage ?? null,
       socketId,
       color,
       isReady: false,

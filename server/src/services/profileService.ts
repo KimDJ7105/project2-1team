@@ -102,36 +102,30 @@ export class ProfileService {
   }
 
   async updateProfile(
-  userId:number,
-  nickname:string,
-  profileImage:string
-){
+    userId: number,
+    nickname: string,
+    profileImage?: string
+  ) {
 
-  const user =
-    await userRepository.findById(userId);
+    const user = await userRepository.findById(userId);
 
+    if (!user) {
+      throw new Error('USER_NOT_FOUND');
+    }
 
-  if(!user){
-    throw new Error("USER_NOT_FOUND");
+    const fieldsToUpdate: any = { nickname };
+    if (profileImage !== undefined && profileImage !== null && profileImage !== '') {
+      fieldsToUpdate.profileImage = profileImage;
+    }
+
+    const updatedUser = await userRepository.update(userId, fieldsToUpdate);
+
+    return {
+      nickname: updatedUser.nickname,
+      profileImage: updatedUser.profileImage,
+    };
+
   }
-
-
-  const updatedUser =
-    await userRepository.update(
-      userId,
-      {
-        nickname,
-        profileImage
-      }
-    );
-
-
-  return {
-    nickname: updatedUser.nickname,
-    profileImage: updatedUser.profileImage
-  };
-
-}
 
 }
 

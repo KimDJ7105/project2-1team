@@ -29,8 +29,13 @@ export const getProfile = async (
   userId: number
 ): Promise<ProfileResponse> => {
 
+  const token = sessionStorage.getItem('token');
+
   const response = await API.get(
-    `/api/profile?userId=${userId}`
+    `/api/profile?userId=${userId}`,
+    {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    }
   );
 
   return response.data;
@@ -58,15 +63,20 @@ export const updateNickname = async (
 
 // 프로필 이미지 업로드용 Presigned URL 요청
 export const getProfileUploadUrl = async (
-  email: string
+  email: string,
+  contentType?: string
 ) => {
+
+  const token = sessionStorage.getItem('token');
 
   const response = await API.get(
     "/api/profile/upload-url",
     {
       params: {
-        email
-      }
+        email,
+        contentType
+      },
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     }
   );
 
@@ -78,15 +88,24 @@ export const getProfileUploadUrl = async (
 export const updateProfile = async (
   userId: number,
   nickname: string,
-  profileImage: string
+  profileImage?: string
 ) => {
+  const token = sessionStorage.getItem('token');
+
+  const body: any = {
+    userId,
+    nickname,
+  };
+
+  if (profileImage !== undefined && profileImage !== null && profileImage !== '') {
+    body.profileImage = profileImage;
+  }
 
   const response = await API.put(
     "/api/profile",
+    body,
     {
-      userId,
-      nickname,
-      profileImage
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     }
   );
 

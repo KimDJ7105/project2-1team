@@ -85,6 +85,33 @@ export class RedisSessionManager implements ISessionManager {
     await this.redisClient.expire(`session:${sessionId}`, ttlSeconds);
   }
 
+  // 세션 일부 필드만 갱신하되 기존 TTL은 유지
+  async updateSession(sessionId: string, updates: Record<string, any>): Promise<void> {
+    const raw = await this.redisClient.get(`session:${sessionId}`);
+    if (!raw) return;
+
+    // TTL을 보존하기 위해 기존 키의 만료시간을 조회
+    const ttl = await this.redisClient.ttl(`session:${sessionId}`);
+
+    const sessionData = JSON.parse(raw);
+    const newSessionData = { ...sessionData, ...updates };
+
+    if (ttl && ttl > 0) {
+      await this.redisClient.set(`session:${sessionId}`, JSON.stringify(newSessionData), 'EX', ttl);
+    } else {
+      await this.redisClient.set(`session:${sessionId}`, JSON.stringify(newSessionData));
+    }
+
+    // user_session:{email} 인덱스의 TTL도 갱신
+    if (newSessionData.email) {
+      if (ttl && ttl > 0) {
+        await this.redisClient.set(`user_session:${newSessionData.email}`, sessionId, 'EX', ttl);
+      } else {
+        await this.redisClient.set(`user_session:${newSessionData.email}`, sessionId);
+      }
+    }
+  }
+
   // 방 목록 조회용 (Redis Hash 전체 가져오기)
   async getAllRooms(): Promise<string[]> {
     return await this.redisClient.hvals('game_rooms');

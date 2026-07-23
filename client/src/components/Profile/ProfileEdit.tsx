@@ -7,7 +7,8 @@ interface ProfileEditViewProps {
   nickname: string;
   email: string;
   userId: number;
-  onSave: (nickname: string) => void;
+  profileImage?: string | null;
+  onSave: () => void;
   onBackClick: () => void;
 }
 
@@ -15,13 +16,14 @@ export default function ProfileEditView({
   nickname,
   email,
   userId,
+  profileImage,
   onSave,
   onBackClick,
 }: ProfileEditViewProps) {
 
   const [editNickname, setEditNickname] = useState(nickname);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(profileImage ?? null);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -40,12 +42,12 @@ export default function ProfileEditView({
       return null;
     }
 
-    const data = await getProfileUploadUrl(email);
+    const data = await getProfileUploadUrl(email, selectedImage.type);
 
     await fetch(data.uploadUrl, {
-      method: "PUT",
+      method: 'PUT',
       headers: {
-        "Content-Type": selectedImage.type,
+        'Content-Type': selectedImage.type,
       },
       body: selectedImage,
     });
@@ -59,8 +61,15 @@ export default function ProfileEditView({
 
     try {
       const imagePath = await uploadProfileImage();
-      await updateProfile(userId, editNickname, imagePath ?? "");
-      onSave(editNickname);
+
+      // profileImage는 새로 선택된 이미지가 있는 경우에만 전달
+      if (imagePath) {
+        await updateProfile(userId, editNickname, imagePath);
+      } else {
+        await updateProfile(userId, editNickname, undefined as any);
+      }
+
+      onSave();
     } catch (error: any) {
       console.error('프로필 저장 실패:', error);
       setErrorMessage(

@@ -1,5 +1,5 @@
 // client/src/components/History/HistoryDetail.tsx
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { getGameRecordDetail } from '../../api/gameRecordApi';
 import '../../assets/styles/GameStyles.css';
 

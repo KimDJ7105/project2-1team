@@ -15,6 +15,9 @@ export interface ISessionManager {
   // 세션 연장 (실시간 활동 시 만료 시간 갱신)
   touchSession(sessionId: string, ttlSeconds: number): Promise<void>;
 
+  // 세션 일부 필드만 갱신하되 기존 TTL은 유지
+  updateSession(sessionId: string, updates: Record<string, any>): Promise<void>;
+
   // [추가] 방 목록 조회용 (Redis Hash 전체 가져오기)
   getAllRooms(): Promise<string[]>;
 

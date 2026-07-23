@@ -1,6 +1,7 @@
 // server/src/controllers/userController.ts
 import { Request, Response } from 'express';
 import { userService } from '../services/userService';
+import { s3Service } from '../services/s3Service';
 import { redisSessionManager } from '../sessions/redisSessionManager';
 import { disconnectTimerManager } from '../sessions/disconnectTimerManager';
 
@@ -62,12 +63,16 @@ export class UserController {
       const ttlSeconds = 3600;
 
       // Redis 세션 데이터 생성 (소켓 검증 등에서 유저 식별에 쓸 데이터 기입)
+      // profileImage가 S3 key일 경우 presigned GET URL로 변환
+      const signedProfile = await s3Service.getProfilePresignedGetUrl(user.profileImage ?? null);
+
       const sessionId = await redisSessionManager.createSession(
         user.email,
-        { 
+        {
           userId: user.userId,
-          email: user.email, 
-          nickname: user.nickname 
+          email: user.email,
+          nickname: user.nickname,
+          profileImage: signedProfile,
         },
         ttlSeconds
       );
@@ -77,7 +82,10 @@ export class UserController {
       res.status(200).json({
         message: '로그인에 성공했습니다.',
         token: sessionId,
-        user,
+        user: {
+          ...user,
+          profileImage: signedProfile ?? null,
+        },
       });
     } catch (error: any) {
       // 가입되지 않은 이메일, 비밀번호 불일치 등 예외 처리

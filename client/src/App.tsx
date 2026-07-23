@@ -4,6 +4,7 @@ import { io, Socket } from 'socket.io-client';
 import AuthPage from './pages/AuthPage';
 import { LobbyPage } from './pages/LobbyPage';
 import { getMeAPI, logoutAPI } from './api/auth';
+import { getProfile } from './api/profileApi';
 import { GamePage } from './pages/GamePage';
 import { WaitingRoomPage } from './pages/WaitingRoomPage';
 
@@ -11,6 +12,7 @@ export default function App() {
   const [user, setUser] = useState<any>(null);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [profileLoaded, setProfileLoaded] = useState<boolean>(false);
 
   // 현재 입장한 방 상태 관리 (null이면 로비, 객체가 있으면 게임방)
   const [currentRoom, setCurrentRoom] = useState<{ 
@@ -58,10 +60,26 @@ export default function App() {
         const data = await getMeAPI(savedToken);
         
         if (data && data.user) {
-          setUser({
+          // 먼저 기본 user 정보 설정
+          let mergedUser: any = {
             ...data.user,
-            token: savedToken
-          });
+            token: savedToken,
+          };
+
+          // 프로필 API로 최신 nickname/profileImage를 가져와 병합
+          try {
+            const prof = await getProfile(data.user.userId);
+            mergedUser = {
+              ...mergedUser,
+              nickname: prof.nickname ?? mergedUser.nickname,
+              profileImage: prof.profileImage ?? mergedUser.profileImage ?? null,
+            };
+          } catch (err) {
+            console.warn('프로필 조회 실패, 소켓 연결 이전에 계속 진행합니다.', err);
+          }
+
+          setUser(mergedUser);
+          setProfileLoaded(true);
         }
       } catch (error) {
         console.error('세션 복구 실패(만료되었거나 잘못된 토큰):', error);
@@ -79,7 +97,8 @@ export default function App() {
   // 2. 소켓 연결 로직
   useEffect(() => {
     if (!user) return;
-    
+    if (!profileLoaded) return; // 프로필이 로드된 이후에만 소켓 연결
+
     const currentToken = user.token || sessionStorage.getItem('token');
 
     if (!currentToken || currentToken === 'undefined') {
@@ -113,7 +132,30 @@ export default function App() {
     return () => {
       socketInstance.disconnect();
     };
-  }, [user, API_BASE_URL]);
+  }, [user, API_BASE_URL, profileLoaded]);
+
+  // 로그인 이후 또는 다른 경로로 user가 설정되었지만 프로필이 아직 로드되지 않은 경우
+  useEffect(() => {
+    if (!user) return;
+    if (profileLoaded) return;
+
+    const loadProfileOnLogin = async () => {
+      try {
+        const prof = await getProfile(user.userId);
+        setUser((prev: any) => ({
+          ...prev,
+          nickname: prof.nickname ?? prev.nickname,
+          profileImage: prof.profileImage ?? prev.profileImage ?? null,
+        }));
+      } catch (err) {
+        console.warn('로그인 후 프로필 조회 실패:', err);
+      } finally {
+        setProfileLoaded(true);
+      }
+    };
+
+    loadProfileOnLogin();
+  }, [user, profileLoaded]);
 
   // 3. 로그아웃 처리 로직
   const handleLogout = async () => {
@@ -132,6 +174,16 @@ export default function App() {
     sessionStorage.removeItem('token');
   };
 
+  const handleUserUpdate = (updates: { nickname?: string; profileImage?: string | null }) => {
+    setUser((prev: any) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        ...updates,
+      };
+    });
+  };
+
   if (isLoading) {
     return <div style={{ padding: '20px', textAlign: 'center' }}>인증 정보를 확인 중입니다...</div>;
   }
@@ -146,6 +198,7 @@ export default function App() {
           socket={socket}
           user={user}
           onLogout={handleLogout}
+          onUserUpdate={handleUserUpdate}
           onJoinSuccess={(roomInfo: { roomId: string; roomTitle: string; players?: any[] }) => {
             handleRoomChange(roomInfo);
             handlePlayingChange(false);
