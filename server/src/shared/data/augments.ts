@@ -40,7 +40,7 @@ export const AUGMENT_LIST: Augment[] = [
   new Augment('different_game', '그건 다른 게임이야', '자신의 돌로 둘러진 영역에 있는 상대 돌을 제거합니다.', 'IMMEDIATE', 'LEGEND'),
   new Augment('peek', '훔쳐보기', '상대의 증강 1개를 확인합니다.', 'IMMEDIATE', 'COMMON'),
   new Augment('confiscate', '압수', '상대의 증강 1개를 사용 상태로 만듭니다.', 'IMMEDIATE', 'RARE'),
-  new Augment('steal', '도둑질', '상대 증강 1개를 대신 사용합니다.', 'IMMEDIATE', 'EPIC'),
+  new Augment('steal', '도둑질', '상대 증강 1개를 훔쳐옵니다.', 'IMMEDIATE', 'EPIC'),
   new Augment('bombardment', '폭격', '랜덤한 위치에 랜덤한 돌 5개를 둡니다.', 'IMMEDIATE', 'RARE'),
   new Augment('table_flip', '밥상 엎기', '모든 돌 위치를 랜덤한 위치로 이동시킵니다.', 'IMMEDIATE', 'LEGEND'),
   new Augment('undo', '물러줘', '이전 내 턴으로 돌아갑니다. (이전 턴 상대 돌과 내 돌 제거)', 'IMMEDIATE', 'EPIC'),

@@ -15,7 +15,7 @@ interface GamePageProps {
 interface Stone {
   x: number;
   y: number;
-  color: 'black' | 'white';
+  color: 'black' | 'white' | 'fog';
   isAugmented?: boolean;
 }
 
@@ -26,6 +26,7 @@ interface PlayerInfo {
   color: 'black' | 'white';
   isReady?: boolean;
   augments?: any[];
+  activeEffects?: { id: string; turnsRemaining: number }[];
 }
 
 const augmentIconMap: Record<string, string> = {
@@ -34,6 +35,8 @@ const augmentIconMap: Record<string, string> = {
   meteor: '☄️', different_game: '🧩', peek: '👁️', confiscate: '🔒',
   steal: '🦹', bombardment: '💣', table_flip: '┻━┻', undo: '⏪'
 };
+
+const chaosColors = ['color-red', 'color-green', 'color-yellow', 'color-blue', 'color-purple'];
 
 export const GamePage: React.FC<GamePageProps> = ({
   socket,
@@ -60,6 +63,7 @@ export const GamePage: React.FC<GamePageProps> = ({
   const [augmentTargetMode, setAugmentTargetMode] = useState<any | null>(null);
   const [sealedCells, setSealedCells] = useState<{ x: number; y: number; turnsRemaining: number }[]>([]);
   const [myHiddenStones, setMyHiddenStones] = useState<{ x: number; y: number; turnsRemaining: number }[]>([]);
+  const [playersArray, setPlayersArray] = useState<PlayerInfo[]>([]);
 
   // 서버의 2차원 보드 데이터를 돌 객체 배열로 변환
   const parseBoardToStones = (board: any[][]): Stone[] => {
@@ -70,10 +74,13 @@ export const GamePage: React.FC<GamePageProps> = ({
 
     const newStones: Stone[] = [];
     for (let y = 0; y < 15; y++) {
-      for (let x = 0; x < 15; x++) {
-        const val = board[y]?.[x];
-        // 빈칸이 아니며 유효한 값이 존재할 경우 전부 돌로 인식하여 강제 렌더링
-        if (val && val !== '') {
+    for (let x = 0; x < 15; x++) {
+      const val = board[y]?.[x];
+      // 빈칸이 아니며 유효한 값이 존재할 경우 전부 렌더링 대상으로 인식
+      if (val && val !== '') {
+        if (val === 'fog') {
+          newStones.push({ x, y, color: 'fog' });
+        } else {
           const colorStr = String(val).toLowerCase();
           const color: 'black' | 'white' = 
             colorStr.includes('w') || colorStr.includes('white') ? 'white' : 'black';
@@ -82,6 +89,7 @@ export const GamePage: React.FC<GamePageProps> = ({
         }
       }
     }
+  }
     //console.log('[디버깅] 파싱된 돌 목록:', newStones);
     return newStones;
   };
@@ -92,6 +100,8 @@ export const GamePage: React.FC<GamePageProps> = ({
     // 플레이어 색상 및 정보 동기화를 담당하는 함수 (불변 값인 email과 nickname을 1, 2순위로 탐색)
     const syncPlayersInfo = (players: PlayerInfo[]) => {
       if (!players || !Array.isArray(players)) return;
+
+      setPlayersArray(players);
 
       const me = players.find((p: PlayerInfo) => 
         (user?.email && p.email === user.email) ||
@@ -217,6 +227,7 @@ export const GamePage: React.FC<GamePageProps> = ({
     socket.on('game:error', handleGameError);
     socket.on('game:over', handleGameOver);
     socket.on('game:augment:select', handleAugmentSelectRequest);
+    socket.on('game:system_message', handleSystemMessage);
 
     // 진입 즉시 동기화 요청
     socket.emit('game:sync', { roomId });
@@ -228,6 +239,7 @@ export const GamePage: React.FC<GamePageProps> = ({
       socket.off('game:error', handleGameError);
       socket.off('game:over', handleGameOver);
       socket.off('game:augment:select', handleAugmentSelectRequest);
+      socket.off('game:system_message', handleSystemMessage);
     };
   }, [socket, roomId, user, onLeave, myColor]);
 
@@ -260,7 +272,7 @@ export const GamePage: React.FC<GamePageProps> = ({
       return;
     }
 
-    if (stones.some((s) => s.x === x && s.y === y)) {
+    if (stones.some((s) => s.x === x && s.y === y && s.color !== 'fog')) {
       return;
     }
 
@@ -414,31 +426,47 @@ export const GamePage: React.FC<GamePageProps> = ({
             const pixelX = 2 + 14 + stone.x * 22;
             const pixelY = 2 + 14 + stone.y * 22;
 
+            if (stone.color === 'fog') {
+              return (
+                <div
+                  key={`fog-${idx}`}
+                  className="stone fog-tile"
+                  style={{
+                    position: 'absolute',
+                    top: `${pixelY}px`,
+                    left: `${pixelX}px`,
+                  }}
+                >
+                  🌫️
+                </div>
+              );
+            }
+            
+            const myPlayerInfo = playersArray.find((p: any) => p.color === myColor);
+            const isChaosActive = myPlayerInfo?.activeEffects?.some((e: any) => e.id === 'chaos_party') || false;
+
+            let colorClass = stone.color === 'black' ? 'b' : 'w';
+
+            if (isChaosActive) {
+              const colorIndex = (stone.x * 7 + stone.y * 13) % chaosColors.length;
+              colorClass = chaosColors[colorIndex];
+            }
+
             // 공백 방지 
             const isMyHidden = myHiddenStones.some(hs => hs.x === stone.x && hs.y === stone.y);
-            const stoneClass = `stone ${stone.color === 'black' ? 'b' : 'w'}${stone.isAugmented ? ' aug' : ''}`;
+            const stoneClass = `stone ${colorClass}${stone.isAugmented ? ' aug' : ''}`;
             return (
               <div
                 key={idx}
                 className={stoneClass}
                 style={{
+                  position: 'absolute',
                   top: `${pixelY}px`,
                   left: `${pixelX}px`,
-                  opacity: isMyHidden ? 0.4 : 1, // 내 화면에서는 반투명하게 표시
-                  transition: 'opacity 0.3s'
+                  transition: 'all 0.3s',
+                  filter: isMyHidden ? 'opacity(0.4)' : 'none'
                 }}
               >
-                {isMyHidden && (
-                  <span style={{
-                    position: 'absolute',
-                    top: '-8px',
-                    right: '-8px',
-                    fontSize: '12px',
-                    pointerEvents: 'none'
-                  }}>
-                    🥷
-                  </span>
-                )}
               </div>
             );
           })}

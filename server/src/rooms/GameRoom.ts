@@ -25,6 +25,7 @@ export class GameRoom {
   public pendingAugmentPlayers: Set<string> = new Set();
   public sealedCells: { x: number; y: number; turnsRemaining: number }[] = [];
   public hiddenStones: { x: number; y: number; email: string; turnsRemaining: number }[] = [];
+  public lastMoves: { black: { x: number; y: number } | null; white: { x: number; y: number } | null } = { black: null, white: null };
 
   constructor(roomId: string, roomTitle: string) {
     this.roomId = roomId;
@@ -76,6 +77,7 @@ export class GameRoom {
     this.turnCount = 1;
     this.sealedCells = [];
     this.hiddenStones = [];
+    this.lastMoves = { black: null, white: null };
   }
 
   // 착수 검증 및 처리 메서드
@@ -111,10 +113,6 @@ export class GameRoom {
       hiddenMoveCrushed = true;
     }
 
-    if (this.board[y][x] !== '') {
-      return { success: false, message: '이미 돌이 놓여 있는 자리입니다.' };
-    }
-
     const isSealed = this.sealedCells.some(cell => cell.x === x && cell.y === y);
     if (isSealed) {
       return { success: false, message: '봉인된 칸에는 돌을 둘 수 없습니다.' };
@@ -122,6 +120,9 @@ export class GameRoom {
 
     // 바둑판에 돌 배치
     this.board[y][x] = this.currentTurn;
+    
+    // 방금 착수한 돌의 좌표를 기록
+    this.lastMoves[this.currentTurn] = { x, y };
 
     const pendingEffectIndex = player.activeEffects.findIndex(e => e.id === 'hidden_move_pending');
     if (pendingEffectIndex !== -1) {
@@ -135,7 +136,7 @@ export class GameRoom {
     const isWin = this.checkWin(x, y, this.currentTurn);
     if (isWin) {
       this.status = 'finished';
-      return { success: true, isWin: true, color: this.currentTurn };
+      return { success: true, isWin: true, color: this.currentTurn, hiddenMoveCrushed : hiddenMoveCrushed };
     }
 
     // 다음 턴으로 교체 및 턴 수 증가
@@ -146,7 +147,7 @@ export class GameRoom {
     this.tickSealedCells();
     this.tickHiddenStones();
 
-    return { success: true, isWin: false, color: player.color };
+    return { success: true, isWin: false, color: player.color, hiddenMoveCrushed : hiddenMoveCrushed };
   }
 
   public tickHiddenStones(): void {

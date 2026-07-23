@@ -48,16 +48,52 @@ function broadcastGameUpdate(io: Server, room: any, extraData: object = {}) {
       // 1. 원본 보드를 복사
       const personalizedBoard = room.board.map((row: any) => [...row]);
 
-      // 2. 현재 플레이어의 것이 아닌 숨겨진 돌을 빈칸으로 덮어씀
-      if (hasHiddenStones) {
-        for (const hiddenStone of room.hiddenStones) {
-          if (hiddenStone.email !== player.email) {
-            personalizedBoard[hiddenStone.y][hiddenStone.x] = '';
+      // [전장의 안개] 효과 적용
+      const hasFog = player.activeEffects?.some((e: any) => e.id === 'fog_of_war');
+      if (hasFog) {
+        const myColor = player.color;
+        // 시야 확보 여부를 체크할 마스크 배열
+        const visibleMask = Array(15).fill(null).map(() => Array(15).fill(false));
+        const directions = [[0, 0], [-1, 0], [1, 0], [0, -1], [0, 1]]; // 내 돌과 상하좌우 4방향
+
+        // 내 돌을 찾아 시야 마스크 활성화
+        for (let y = 0; y < 15; y++) {
+          for (let x = 0; x < 15; x++) {
+            if (room.board[y][x] === myColor) {
+              for (const [dy, dx] of directions) {
+                const ny = y + dy;
+                const nx = x + dx;
+                if (ny >= 0 && ny < 15 && nx >= 0 && nx < 15) {
+                  visibleMask[ny][nx] = true;
+                }
+              }
+            }
+          }
+        }
+
+        // 시야가 닿지 않는 곳을 fog 처리
+        for (let y = 0; y < 15; y++) {
+          for (let x = 0; x < 15; x++) {
+            if (!visibleMask[y][x]) {
+              personalizedBoard[y][x] = 'fog'; // 클라이언트에서 이 문자열을 받아 안개 그래픽 렌더링
+            }
           }
         }
       }
 
-      // 본인의 숨겨진 돌 위치를 클라이언트에 전달하기 위한 배열 (클라이언트에서 반투명 처리 등 활용 가능)
+      // [숨겨진 돌] 처리
+      if (hasHiddenStones) {
+        for (const hiddenStone of room.hiddenStones) {
+          if (hiddenStone.email !== player.email) {
+            // 전장의 안개로 이미 가려진 칸은 덮어쓸 필요 없음
+            if (personalizedBoard[hiddenStone.y][hiddenStone.x] !== 'fog') {
+              personalizedBoard[hiddenStone.y][hiddenStone.x] = '';
+            }
+          }
+        }
+      }
+
+      // 본인의 숨겨진 돌 위치를 클라이언트에 전달하기 위한 배열
       const myHiddenStones = room.hiddenStones
         ? room.hiddenStones.filter((s: any) => s.email === player.email)
         : [];
@@ -65,10 +101,10 @@ function broadcastGameUpdate(io: Server, room: any, extraData: object = {}) {
       io.to(player.socketId).emit('game:update', {
         currentTurn: room.currentTurn,
         turnCount: room.turnCount,
-        board: personalizedBoard, // 조작된 보드 전송
+        board: personalizedBoard,
         players: playersArray,
         sealedCells: room.sealedCells,
-        myHiddenStones, // 본인의 숨겨진 돌 정보 추가
+        myHiddenStones,
         ...extraData
       });
     }
@@ -794,7 +830,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
         // 이번 턴에 둔 돌이 1턴 동안 상대에게 안 보입니다.
         player.activeEffects.push({
             id: 'hidden_move_pending',
-            turnsRemaining: 1 // 착수 시점에 바로 소모되므로 1로 설정
+            turnsRemaining: 3
         });
         console.log(`[Hidden Move] ${player.nickname} 님이 숨겨진 한 수 대기 상태가 되었습니다.`);
       }
@@ -898,17 +934,164 @@ io.on('connection', (socket: AuthenticatedSocket) => {
 
         console.log(`[Meteor] ${player.nickname} 님이 (${target.x}, ${target.y}) 중심 3x3 영역의 돌 ${collectedStones.length}개를 무작위 위치로 날려버렸습니다.`);
       }
-      else if (augmentId === 'different_game' && target) {
+      else if (augmentId === 'different_game') {
         // 자신의 돌로 둘러진 영역에 있는 상대 돌을 제거합니다.
+        const myColor = player.color; 
+        const oppColor = myColor === 'black' ? 'white' : 'black';
+
+        // 방문 여부를 체크할 2차원 배열 초기화
+        const visited = Array.from({ length: 15 }, () => Array(15).fill(false));
+        const deadStones = [];
+      
+        // 상하좌우 방향 배열
+        const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+      
+        // 전체 보드를 순회하며 상대방 돌 그룹의 숨구멍을 검사
+        for (let y = 0; y < 15; y++) {
+          for (let x = 0; x < 15; x++) {
+            if (room.board[y][x] === oppColor && !visited[y][x]) {
+              const group = [];
+              const queue = [{ cx: x, cy: y }];
+              visited[y][x] = true;
+              let hasLiberty = false;
+            
+              // BFS 탐색을 통해 상하좌우로 연결된 상대방 돌을 하나의 그룹으로 묶음
+              let head = 0;
+              while (head < queue.length) {
+                const { cx, cy } = queue[head++];
+                group.push({ x: cx, y: cy });
+              
+                for (const [dx, dy] of directions) {
+                  const nx = cx + dx;
+                  const ny = cy + dy;
+                
+                  // 보드판 범위 이내인지 확인
+                  if (nx >= 0 && nx < 15 && ny >= 0 && ny < 15) {
+                    const cell = room.board[ny][nx];
+
+                    if (!cell || cell === '') {
+                      // 빈칸이 하나라도 발견되면 이 그룹은 숨구멍이 있는 것으로 판정
+                      hasLiberty = true;
+                    } else if (cell === oppColor && !visited[ny][nx]) {
+                      visited[ny][nx] = true;
+                      queue.push({ cx: nx, cy: ny });
+                    }
+                  }
+                }
+              }
+            
+              // 탐색 종료 후 숨구멍이 단 하나도 없다면 사방이 막힌 그룹이므로 제거 배열에 추가
+              if (!hasLiberty) {
+                deadStones.push(...group);
+              }
+            }
+          }
+        }
+
+        // 둘러싸인 상대방 돌들을 보드에서 일괄 제거
+        let removedCount = 0;
+        deadStones.forEach(stone => {
+          room.board[stone.y][stone.x] = '';
+          removedCount++;
+        });
       }
       else if (augmentId === 'peek') {
         // 상대의 증강 1개를 확인합니다.
+        const opponent = Array.from(room.players.values()).find(p => p.email !== userEmail);
+        
+        if (!opponent) {
+          socket.emit('game:error', { message: '상대방 정보를 찾을 수 없습니다.' });
+          return;
+        }
+
+        // 상대방의 증강 중 아직 사용하지 않은(isUsed가 false인) 증강들 필터링
+        const unusedAugments = opponent.augments.filter(a => !a.isUsed);
+
+        if (unusedAugments.length === 0) {
+          socket.emit('game:error', { message: '상대방이 보유한 사용 가능한 증강이 없습니다.' });
+          return;
+        }
+
+        // 남은 증강 중 무작위로 하나 선택
+        const randomIndex = Math.floor(Math.random() * unusedAugments.length);
+        const targetAugment = unusedAugments[randomIndex];
+
+        // 얕은 복사를 통해 내 증강 배열에 추가하되, 사용할 수는 없도록 isUsed를 true로 설정
+        const myPeekIndex = player.augments.findIndex(a => a.id === augmentId && !a.isUsed);
+        if (myPeekIndex !== -1) {
+          player.augments[myPeekIndex] = {
+            ...targetAugment,
+            isUsed: true // 사용 불가 상태로 표시만 함
+          };
+        }
+
+        console.log(`[Peek] ${player.nickname} 님이 ${opponent.nickname} 님의 증강(${targetAugment.name})을 훔쳐봤습니다.`);
+
+        broadcastGameUpdate(io, room);
+        return;
       }
       else if (augmentId === 'confiscate') {
         // 상대의 증강 1개를 사용 상태로 만듭니다.
+        const opponent = Array.from(room.players.values()).find(p => p.email !== userEmail);
+        
+        if (!opponent) {
+          socket.emit('game:error', { message: '상대방 정보를 찾을 수 없습니다.' });
+          return;
+        }
+
+        // 상대방의 증강 중 아직 사용하지 않은 증강들 필터링
+        const unusedAugments = opponent.augments.filter(a => !a.isUsed);
+
+        if (unusedAugments.length === 0) {
+          socket.emit('game:error', { message: '상대방이 보유한 사용 가능한 증강이 없습니다.' });
+          return;
+        }
+
+        // 무작위로 증강 하나 선택
+        const randomIndex = Math.floor(Math.random() * unusedAugments.length);
+        const targetAugment = unusedAugments[randomIndex];
+
+        // 선택된 상대방의 증강을 강제로 사용 완료(isUsed = true) 처리
+        targetAugment.isUsed = true;
+
+        console.log(`[Confiscate] ${player.nickname} 님이 ${opponent.nickname} 님의 증강(${targetAugment.name})을 압수(사용 불가 처리)했습니다.`);
       }
       else if (augmentId === 'steal') {
         // 상대 증강 1개를 대신 사용합니다.
+        const opponent = Array.from(room.players.values()).find(p => p.email !== userEmail);
+        
+        if (!opponent) {
+          socket.emit('game:error', { message: '상대방 정보를 찾을 수 없습니다.' });
+          return;
+        }
+
+        // 상대방의 증강 중 아직 사용하지 않은 증강들 필터링
+        const unusedAugments = opponent.augments.filter(a => !a.isUsed);
+
+        if (unusedAugments.length === 0) {
+          socket.emit('game:error', { message: '상대방이 보유한 사용 가능한 증강이 없습니다.' });
+          return;
+        }
+
+        // 무작위로 증강 하나 선택
+        const randomIndex = Math.floor(Math.random() * unusedAugments.length);
+        const targetAugment = unusedAugments[randomIndex];
+
+        // 1. 상대방의 원본 증강은 사용 불가 상태(압수)로 변경
+        targetAugment.isUsed = true;
+
+        // 2. 훔친 증강을 내 인벤토리에 적용
+        const myStealIndex = player.augments.findIndex(a => a.id === augmentId && !a.isUsed);
+        if (myStealIndex !== -1) {
+          player.augments[myStealIndex] = {
+            ...targetAugment,
+            isUsed: false
+          };
+        }
+
+        console.log(`[Steal] ${player.nickname} 님이 ${opponent.nickname} 님의 증강(${targetAugment.name})을 훔쳤습니다.`);
+        broadcastGameUpdate(io, room);
+        return;
       }
       else if (augmentId === 'bombardment') {
         // 랜덤한 위치에 랜덤한 돌 5개를 둡니다.
@@ -988,6 +1171,31 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       }
       else if (augmentId === 'undo') {
         // 이전 내 턴으로 돌아갑니다. (이전 턴 상대 돌과 내 돌 제거)
+        const lastBlack = room.lastMoves.black;
+        const lastWhite = room.lastMoves.white;
+
+        // 1. 초반이라 아직 두 플레이어 모두 1번 이상 착수하지 않은 경우 방어
+        if (!lastBlack || !lastWhite) {
+          socket.emit('game:error', { message: '양측 모두 한 번씩 착수해야 무르기를 사용할 수 있습니다.' });
+          return;
+        }
+
+        // 2. 보드 상태 확인 (중간에 증강으로 인해 돌이 변경되거나 파괴되었는지 검사)
+        if (room.board[lastBlack.y][lastBlack.x] !== 'black' || 
+            room.board[lastWhite.y][lastWhite.x] !== 'white') {
+          socket.emit('game:error', { message: '최근 착수된 돌이 파괴되거나 색이 변하여 무르기를 사용할 수 없습니다.' });
+          return;
+        }
+
+        // 3. 두 돌 모두 보드에서 삭제
+        room.board[lastBlack.y][lastBlack.x] = '';
+        room.board[lastWhite.y][lastWhite.x] = '';
+        
+        // 4. 한 번 무르기가 적용된 돌을 다시 무를 수 없도록 최근 착수 기록 초기화
+        room.lastMoves.black = null;
+        room.lastMoves.white = null;
+
+        console.log(`[Undo] ${player.nickname} 님이 무르기를 사용했습니다. 흑(${lastBlack.x}, ${lastBlack.y}), 백(${lastWhite.x}, ${lastWhite.y}) 돌이 제거되었습니다.`);
       }
 
       // 사용 완료된 증강은 소모 처리 필요. 
