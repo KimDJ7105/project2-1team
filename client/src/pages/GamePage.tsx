@@ -65,6 +65,7 @@ export const GamePage: React.FC<GamePageProps> = ({
   const [myHiddenStones, setMyHiddenStones] = useState<{ x: number; y: number; turnsRemaining: number }[]>([]);
   const [playersArray, setPlayersArray] = useState<PlayerInfo[]>([]);
   const [augmentAlert, setAugmentAlert] = useState<{ nickname: string; augmentName: string; augmentIcon: string } | null>(null);
+  const [lastMoves, setLastMoves] = useState<{ black: { x: number; y: number } | null; white: { x: number; y: number } | null }>({ black: null, white: null });
 
   // 서버의 2차원 보드 데이터를 돌 객체 배열로 변환
   const parseBoardToStones = (board: any[][]): Stone[] => {
@@ -146,6 +147,10 @@ export const GamePage: React.FC<GamePageProps> = ({
       if (data.players && Array.isArray(data.players)) {
         syncPlayersInfo(data.players);
       }
+
+      if (data.lastMoves) {
+        setLastMoves(data.lastMoves);
+      }
     };
 
     // 착수 성공 시 서버가 보내는 갱신 신호 처리
@@ -181,6 +186,9 @@ export const GamePage: React.FC<GamePageProps> = ({
           if (prev.some((s) => s.x === data.x && s.y === data.y)) return prev;
           return [...prev, { x: data.x, y: data.y, color: colorVal as 'black' | 'white' }];
         });
+      }
+      if (data.lastMoves) {
+        setLastMoves(data.lastMoves);
       }
     };
 
@@ -467,9 +475,13 @@ export const GamePage: React.FC<GamePageProps> = ({
               colorClass = chaosColors[colorIndex];
             }
 
+            const isLastMove = 
+              (stone.color === 'black' && lastMoves.black?.x === stone.x && lastMoves.black?.y === stone.y) ||
+              (stone.color === 'white' && lastMoves.white?.x === stone.x && lastMoves.white?.y === stone.y);
+
             // 공백 방지 
             const isMyHidden = myHiddenStones.some(hs => hs.x === stone.x && hs.y === stone.y);
-            const stoneClass = `stone ${colorClass}${stone.isAugmented ? ' aug' : ''}`;
+            const stoneClass = `stone ${colorClass}${stone.isAugmented ? ' aug' : ''}${isLastMove ? ' last-move' : ''}`;
             return (
               <div
                 key={idx}

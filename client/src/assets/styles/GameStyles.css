@@ -565,3 +565,17 @@
   pointer-events: none;
   opacity: 0.8;
 }
+
+.stone.last-move::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  background-color: var(--yellow); /* 혹은 원하는 포인트 색상 */
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 4px var(--yellow-dark);
+  z-index: 2;
+}

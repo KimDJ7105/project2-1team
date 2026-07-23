@@ -13,7 +13,6 @@ import { gameRoomManager } from './rooms/GameRoom';
 import profileRoutes from './routes/profileRoutes';
 import activeConfig from './config/configLoader';
 import { userStateRepositoryImpl } from './repositories/mysqlUserStateRepository';
-import { userRepository, userStateRepository } from './repositories';
 import gameRecordRoutes from "./routes/gameRecordRoutes";
 import { gameRecordRepositoryImpl } from "./repositories/mysqlGameRecordRepository";
 import { AUGMENT_MAP } from './shared/data/augments';
@@ -105,6 +104,7 @@ function broadcastGameUpdate(io: Server, room: any, extraData: object = {}) {
         players: playersArray,
         sealedCells: room.sealedCells,
         myHiddenStones,
+        lastMoves: room.lastMoves,
         ...extraData
       });
     }
@@ -116,6 +116,7 @@ function broadcastGameUpdate(io: Server, room: any, extraData: object = {}) {
       board: room.board,
       players: playersArray,
       sealedCells: room.sealedCells,
+      lastMoves: room.lastMoves,
       ...extraData
     });
   }
