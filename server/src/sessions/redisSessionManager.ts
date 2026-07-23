@@ -126,6 +126,20 @@ export class RedisSessionManager implements ISessionManager {
   async deleteRoom(roomId: string): Promise<void> {
     await this.redisClient.hdel('game_rooms', roomId);
   }
+
+  async saveRoomState(roomId: string, state: any) {
+    await this.redisClient.set(`gameroom:${roomId}`, JSON.stringify(state));
+  }
+
+  async getRoomState(roomId: string) {
+    const data = await this.redisClient.get(`gameroom:${roomId}`);
+    return data ? JSON.parse(data) : null;
+  }
+
+  async deleteRoomState(roomId: string) {
+    await this.redisClient.del(`gameroom:${roomId}`);
+  }
+
 }
 
 //싱글톤
