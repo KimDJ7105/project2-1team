@@ -14,7 +14,6 @@ import profileRoutes from './routes/profileRoutes';
 import { s3Service } from './services/s3Service';
 import activeConfig from './config/configLoader';
 import { userStateRepositoryImpl } from './repositories/mysqlUserStateRepository';
-import { userRepository, userStateRepository } from './repositories';
 import gameRecordRoutes from "./routes/gameRecordRoutes";
 import { gameRecordRepositoryImpl } from "./repositories/mysqlGameRecordRepository";
 import { AUGMENT_MAP } from './shared/data/augments';
@@ -106,6 +105,7 @@ function broadcastGameUpdate(io: Server, room: any, extraData: object = {}) {
         players: playersArray,
         sealedCells: room.sealedCells,
         myHiddenStones,
+        lastMoves: room.lastMoves,
         ...extraData
       });
     }
@@ -117,6 +117,7 @@ function broadcastGameUpdate(io: Server, room: any, extraData: object = {}) {
       board: room.board,
       players: playersArray,
       sealedCells: room.sealedCells,
+      lastMoves: room.lastMoves,
       ...extraData
     });
   }
@@ -1133,6 +1134,14 @@ io.on('connection', (socket: AuthenticatedSocket) => {
 
         console.log(`[Peek] ${player.nickname} 님이 ${opponent.nickname} 님의 증강(${targetAugment.name})을 훔쳐봤습니다.`);
 
+        if (opponent && opponent.socketId) {
+          io.to(opponent.socketId).emit('game:augment:notified', {
+            nickname: player.nickname,
+            augmentName: augmentData.name,
+            description: augmentData.description
+          });
+        }
+
         broadcastGameUpdate(io, room);
         return;
       }
@@ -1196,6 +1205,15 @@ io.on('connection', (socket: AuthenticatedSocket) => {
         }
 
         console.log(`[Steal] ${player.nickname} 님이 ${opponent.nickname} 님의 증강(${targetAugment.name})을 훔쳤습니다.`);
+
+        if (opponent && opponent.socketId) {
+          io.to(opponent.socketId).emit('game:augment:notified', {
+            nickname: player.nickname,
+            augmentName: augmentData.name,
+            description: augmentData.description
+          });
+        }
+
         broadcastGameUpdate(io, room);
         return;
       }
@@ -1313,14 +1331,18 @@ io.on('connection', (socket: AuthenticatedSocket) => {
         return;
       }
 
+      const opponent = Array.from(room.players.values()).find(p => p.email !== userEmail);
+          
+      if (opponent && opponent.socketId) {
+        io.to(opponent.socketId).emit('game:augment:notified', {
+          nickname: player.nickname,
+          augmentName: augmentData.name,
+          description: augmentData.description
+        });
+      }
+
       // 갱신된 보드와 플레이어 상태를 방 전체에 동기화
       broadcastGameUpdate(io, room)
-      // io.to(roomId).emit('game:update', {
-      //   currentTurn: room.currentTurn,
-      //   turnCount: room.turnCount,
-      //   board: room.board,
-      //   players: Array.from(room.players.values())
-      // });
 
     } catch (err) {
       console.error('증강 사용 처리 중 오류:', err);

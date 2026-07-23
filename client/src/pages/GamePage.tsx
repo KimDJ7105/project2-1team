@@ -67,6 +67,8 @@ export const GamePage: React.FC<GamePageProps> = ({
   const [sealedCells, setSealedCells] = useState<{ x: number; y: number; turnsRemaining: number }[]>([]);
   const [myHiddenStones] = useState<{ x: number; y: number; turnsRemaining: number }[]>([]);
   const [playersArray, setPlayersArray] = useState<PlayerInfo[]>([]);
+  const [augmentAlert, setAugmentAlert] = useState<{ nickname: string; augmentName: string; augmentIcon: string } | null>(null);
+  const [lastMoves, setLastMoves] = useState<{ black: { x: number; y: number } | null; white: { x: number; y: number } | null }>({ black: null, white: null });
 
   // 서버의 2차원 보드 데이터를 돌 객체 배열로 변환
   const parseBoardToStones = (board: any[][]): Stone[] => {
@@ -155,6 +157,10 @@ export const GamePage: React.FC<GamePageProps> = ({
       if (data.players && Array.isArray(data.players)) {
         syncPlayersInfo(data.players);
       }
+
+      if (data.lastMoves) {
+        setLastMoves(data.lastMoves);
+      }
     };
 
     // 착수 성공 시 서버가 보내는 갱신 신호 처리
@@ -185,6 +191,9 @@ export const GamePage: React.FC<GamePageProps> = ({
           if (prev.some((s) => s.x === data.x && s.y === data.y)) return prev;
           return [...prev, { x: data.x, y: data.y, color: colorVal as 'black' | 'white' }];
         });
+      }
+      if (data.lastMoves) {
+        setLastMoves(data.lastMoves);
       }
     };
 
@@ -220,6 +229,16 @@ export const GamePage: React.FC<GamePageProps> = ({
       setIsOverlayHidden(false);
     };
 
+    const handleAugmentNotified = (data: { nickname: string; augmentName: string; augmentIcon: string }) => {
+      console.log('[GamePage] 상대방 증강 사용 알림 수신:', data);
+      setAugmentAlert(data);
+
+      // 3초 뒤 자동 소멸
+      setTimeout(() => {
+        setAugmentAlert(null);
+      }, 3000);
+    };
+
     socket.on('game:start', handleInitialState);
     socket.on('game:sync:response', handleInitialState);
     socket.on('game:update', handleGameUpdate);
@@ -232,6 +251,7 @@ export const GamePage: React.FC<GamePageProps> = ({
     };
 
     socket.on('game:system_message', handleSystemMessage);
+    socket.on('game:augment:notified', handleAugmentNotified);
 
     socket.emit('game:sync', { roomId });
 
@@ -243,6 +263,7 @@ export const GamePage: React.FC<GamePageProps> = ({
       socket.off('game:over', handleGameOver);
       socket.off('game:augment:select', handleAugmentSelectRequest);
       socket.off('game:system_message', handleSystemMessage);
+      socket.off('game:augment:notified', handleAugmentNotified);
     };
   }, [socket, roomId, user, onLeave, myColor]);
 
@@ -380,6 +401,18 @@ export const GamePage: React.FC<GamePageProps> = ({
 
         <div className="board" onClick={handleBoardClick}>
           <div className="grid-lines"></div>
+          
+          {/* 상대방 증강 사용 시 보드 위에 잠깐 뜨는 알림 창 */}
+          {augmentAlert && (
+            <div className="augment-alert-toast">
+              <div className="augment-alert-sub">
+                ⚡ 상대방({augmentAlert.nickname})의 증강 발동!
+              </div>
+              <div className="augment-alert-main">
+                {augmentAlert.augmentIcon} {augmentAlert.augmentName}
+              </div>
+            </div>
+          )}
 
           <div className="star-point" style={{ top: getStarPos(7), left: getStarPos(7) }}></div>
           <div className="star-point" style={{ top: getStarPos(3), left: getStarPos(3) }}></div>
@@ -394,20 +427,10 @@ export const GamePage: React.FC<GamePageProps> = ({
             return (
               <div
                 key={`seal-${idx}`}
+                className="sealed-cell-icon"
                 style={{
-                  position: 'absolute',
                   top: `${pixelY}px`,
                   left: `${pixelX}px`,
-                  width: '20px',
-                  height: '20px',
-                  transform: 'translate(-50%, -50%)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '14px',
-                  zIndex: 5,
-                  pointerEvents: 'none',
-                  opacity: 0.8
                 }}
               >
                 🚫
@@ -445,8 +468,13 @@ export const GamePage: React.FC<GamePageProps> = ({
               colorClass = chaosColors[colorIndex];
             }
 
+            const isLastMove = 
+              (stone.color === 'black' && lastMoves.black?.x === stone.x && lastMoves.black?.y === stone.y) ||
+              (stone.color === 'white' && lastMoves.white?.x === stone.x && lastMoves.white?.y === stone.y);
+
+            // 공백 방지 
             const isMyHidden = myHiddenStones.some(hs => hs.x === stone.x && hs.y === stone.y);
-            const stoneClass = `stone ${colorClass}${stone.isAugmented ? ' aug' : ''}`;
+            const stoneClass = `stone ${colorClass}${stone.isAugmented ? ' aug' : ''}${isLastMove ? ' last-move' : ''}`;
             return (
               <div
                 key={idx}
