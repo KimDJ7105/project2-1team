@@ -2,14 +2,14 @@
 development:
   env: "dev" # 개발 환경
   client:
-    url: ${CLIENT_URL:http://localhost:5173}
+    url: ${CLIENT_URL}
   database:
     type: "mysql" # 로컬 개발 환경에서는 가상 메모리 저장소 작동
-    host: ${DB_HOST:127.0.0.1}
-    port: ${DB_PORT:3306}
-    username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:1234}
-    database: ${DB_NAME:testdb}
+    host: ${DB_HOST}
+    port: ${DB_PORT}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    database: ${DB_NAME}
 
   redis:
     host: "localhost"
