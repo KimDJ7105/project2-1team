@@ -17,6 +17,7 @@ import { userStateRepositoryImpl } from './repositories/mysqlUserStateRepository
 import gameRecordRoutes from "./routes/gameRecordRoutes";
 import { gameRecordRepositoryImpl } from "./repositories/mysqlGameRecordRepository";
 import { AUGMENT_MAP } from './shared/data/augments';
+import { userRepository, userStateRepository } from './repositories';
 
 const app = express();
 
