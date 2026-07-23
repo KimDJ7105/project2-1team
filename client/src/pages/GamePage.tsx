@@ -217,6 +217,7 @@ export const GamePage: React.FC<GamePageProps> = ({
     socket.on('game:error', handleGameError);
     socket.on('game:over', handleGameOver);
     socket.on('game:augment:select', handleAugmentSelectRequest);
+    socket.on('game:system_message', handleSystemMessage);
 
     // 진입 즉시 동기화 요청
     socket.emit('game:sync', { roomId });
@@ -228,6 +229,7 @@ export const GamePage: React.FC<GamePageProps> = ({
       socket.off('game:error', handleGameError);
       socket.off('game:over', handleGameOver);
       socket.off('game:augment:select', handleAugmentSelectRequest);
+      socket.off('game:system_message', handleSystemMessage);
     };
   }, [socket, roomId, user, onLeave, myColor]);
 
@@ -422,23 +424,13 @@ export const GamePage: React.FC<GamePageProps> = ({
                 key={idx}
                 className={stoneClass}
                 style={{
+                  position: 'absolute',
                   top: `${pixelY}px`,
                   left: `${pixelX}px`,
-                  opacity: isMyHidden ? 0.4 : 1, // 내 화면에서는 반투명하게 표시
-                  transition: 'opacity 0.3s'
+                  transition: 'all 0.3s',
+                  filter: isMyHidden ? 'opacity(0.4)' : 'none'
                 }}
               >
-                {isMyHidden && (
-                  <span style={{
-                    position: 'absolute',
-                    top: '-8px',
-                    right: '-8px',
-                    fontSize: '12px',
-                    pointerEvents: 'none'
-                  }}>
-                    🥷
-                  </span>
-                )}
               </div>
             );
           })}

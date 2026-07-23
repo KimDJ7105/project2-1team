@@ -789,7 +789,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
         // 이번 턴에 둔 돌이 1턴 동안 상대에게 안 보입니다.
         player.activeEffects.push({
             id: 'hidden_move_pending',
-            turnsRemaining: 1 // 착수 시점에 바로 소모되므로 1로 설정
+            turnsRemaining: 3
         });
         console.log(`[Hidden Move] ${player.nickname} 님이 숨겨진 한 수 대기 상태가 되었습니다.`);
       }
