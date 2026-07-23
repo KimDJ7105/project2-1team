@@ -591,6 +591,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       await redisSessionManager.saveRoom(roomId, updatedRoom);
     } else {
       // 남은 사람이 없어 방이 삭제된 경우 Redis에서도 제거
+      await gameRoomManager.deleteRoom(roomId);
       await redisSessionManager.deleteRoom(roomId);
     }
 
@@ -1505,6 +1506,24 @@ async function startServer() {
     // 서버가 켜지기 직전에 DB 커넥션 풀을 만들고 schema.sql을 실행
     await initializeDatabase();
     console.log('[Server] 데이터베이스 초기화 및 스키마 동기화 완료.');
+
+    // 서버 구동 시 Redis에 남아있는 유령 방(플레이어 0명 등) 청소 작업
+    try {
+      const allRoomsData = await redisSessionManager.getAllRooms();
+      for (const roomStr of allRoomsData) {
+        const summary = JSON.parse(roomStr);
+        const roomInstance = await gameRoomManager.getRoom(summary.roomId);
+        
+        // 방 인스턴스가 아예 없거나, 플레이어가 한 명도 없는 경우 깔끔하게 삭제
+        if (!roomInstance || roomInstance.players.size === 0) {
+          await gameRoomManager.deleteRoom(summary.roomId);
+          await redisSessionManager.deleteRoom(summary.roomId);
+          console.log(`[Ghost Room Clean] 유령 방 정리 완료: ${summary.roomId}`);
+        }
+      }
+    } catch (cleanErr) {
+      console.warn('[Ghost Room Clean] 정리 중 예외 발생:', cleanErr);
+    }
 
     // Redis Pub/Sub 클라이언트 설정 (멀티 Pod 환경 Socket.io 동기화)
     const redisUrl = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
