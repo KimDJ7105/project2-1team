@@ -25,6 +25,7 @@ export class GameRoom {
   public pendingAugmentPlayers: Set<string> = new Set();
   public sealedCells: { x: number; y: number; turnsRemaining: number }[] = [];
   public hiddenStones: { x: number; y: number; email: string; turnsRemaining: number }[] = [];
+  public lastMoves: { black: { x: number; y: number } | null; white: { x: number; y: number } | null } = { black: null, white: null };
 
   constructor(roomId: string, roomTitle: string) {
     this.roomId = roomId;
@@ -76,6 +77,7 @@ export class GameRoom {
     this.turnCount = 1;
     this.sealedCells = [];
     this.hiddenStones = [];
+    this.lastMoves = { black: null, white: null };
   }
 
   // 착수 검증 및 처리 메서드
@@ -118,6 +120,9 @@ export class GameRoom {
 
     // 바둑판에 돌 배치
     this.board[y][x] = this.currentTurn;
+    
+    // 방금 착수한 돌의 좌표를 기록
+    this.lastMoves[this.currentTurn] = { x, y };
 
     const pendingEffectIndex = player.activeEffects.findIndex(e => e.id === 'hidden_move_pending');
     if (pendingEffectIndex !== -1) {

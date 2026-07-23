@@ -1130,6 +1130,31 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       }
       else if (augmentId === 'undo') {
         // 이전 내 턴으로 돌아갑니다. (이전 턴 상대 돌과 내 돌 제거)
+        const lastBlack = room.lastMoves.black;
+        const lastWhite = room.lastMoves.white;
+
+        // 1. 초반이라 아직 두 플레이어 모두 1번 이상 착수하지 않은 경우 방어
+        if (!lastBlack || !lastWhite) {
+          socket.emit('game:error', { message: '양측 모두 한 번씩 착수해야 무르기를 사용할 수 있습니다.' });
+          return;
+        }
+
+        // 2. 보드 상태 확인 (중간에 증강으로 인해 돌이 변경되거나 파괴되었는지 검사)
+        if (room.board[lastBlack.y][lastBlack.x] !== 'black' || 
+            room.board[lastWhite.y][lastWhite.x] !== 'white') {
+          socket.emit('game:error', { message: '최근 착수된 돌이 파괴되거나 색이 변하여 무르기를 사용할 수 없습니다.' });
+          return;
+        }
+
+        // 3. 두 돌 모두 보드에서 삭제
+        room.board[lastBlack.y][lastBlack.x] = '';
+        room.board[lastWhite.y][lastWhite.x] = '';
+        
+        // 4. 한 번 무르기가 적용된 돌을 다시 무를 수 없도록 최근 착수 기록 초기화
+        room.lastMoves.black = null;
+        room.lastMoves.white = null;
+
+        console.log(`[Undo] ${player.nickname} 님이 무르기를 사용했습니다. 흑(${lastBlack.x}, ${lastBlack.y}), 백(${lastWhite.x}, ${lastWhite.y}) 돌이 제거되었습니다.`);
       }
 
       // 사용 완료된 증강은 소모 처리 필요. 
