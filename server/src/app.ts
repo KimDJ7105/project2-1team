@@ -893,17 +893,164 @@ io.on('connection', (socket: AuthenticatedSocket) => {
 
         console.log(`[Meteor] ${player.nickname} 님이 (${target.x}, ${target.y}) 중심 3x3 영역의 돌 ${collectedStones.length}개를 무작위 위치로 날려버렸습니다.`);
       }
-      else if (augmentId === 'different_game' && target) {
+      else if (augmentId === 'different_game') {
         // 자신의 돌로 둘러진 영역에 있는 상대 돌을 제거합니다.
+        const myColor = player.color; 
+        const oppColor = myColor === 'black' ? 'white' : 'black';
+
+        // 방문 여부를 체크할 2차원 배열 초기화
+        const visited = Array.from({ length: 15 }, () => Array(15).fill(false));
+        const deadStones = [];
+      
+        // 상하좌우 방향 배열
+        const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+      
+        // 전체 보드를 순회하며 상대방 돌 그룹의 숨구멍을 검사
+        for (let y = 0; y < 15; y++) {
+          for (let x = 0; x < 15; x++) {
+            if (room.board[y][x] === oppColor && !visited[y][x]) {
+              const group = [];
+              const queue = [{ cx: x, cy: y }];
+              visited[y][x] = true;
+              let hasLiberty = false;
+            
+              // BFS 탐색을 통해 상하좌우로 연결된 상대방 돌을 하나의 그룹으로 묶음
+              let head = 0;
+              while (head < queue.length) {
+                const { cx, cy } = queue[head++];
+                group.push({ x: cx, y: cy });
+              
+                for (const [dx, dy] of directions) {
+                  const nx = cx + dx;
+                  const ny = cy + dy;
+                
+                  // 보드판 범위 이내인지 확인
+                  if (nx >= 0 && nx < 15 && ny >= 0 && ny < 15) {
+                    const cell = room.board[ny][nx];
+
+                    if (!cell || cell === '') {
+                      // 빈칸이 하나라도 발견되면 이 그룹은 숨구멍이 있는 것으로 판정
+                      hasLiberty = true;
+                    } else if (cell === oppColor && !visited[ny][nx]) {
+                      visited[ny][nx] = true;
+                      queue.push({ cx: nx, cy: ny });
+                    }
+                  }
+                }
+              }
+            
+              // 탐색 종료 후 숨구멍이 단 하나도 없다면 사방이 막힌 그룹이므로 제거 배열에 추가
+              if (!hasLiberty) {
+                deadStones.push(...group);
+              }
+            }
+          }
+        }
+
+        // 둘러싸인 상대방 돌들을 보드에서 일괄 제거
+        let removedCount = 0;
+        deadStones.forEach(stone => {
+          room.board[stone.y][stone.x] = '';
+          removedCount++;
+        });
       }
       else if (augmentId === 'peek') {
         // 상대의 증강 1개를 확인합니다.
+        const opponent = Array.from(room.players.values()).find(p => p.email !== userEmail);
+        
+        if (!opponent) {
+          socket.emit('game:error', { message: '상대방 정보를 찾을 수 없습니다.' });
+          return;
+        }
+
+        // 상대방의 증강 중 아직 사용하지 않은(isUsed가 false인) 증강들 필터링
+        const unusedAugments = opponent.augments.filter(a => !a.isUsed);
+
+        if (unusedAugments.length === 0) {
+          socket.emit('game:error', { message: '상대방이 보유한 사용 가능한 증강이 없습니다.' });
+          return;
+        }
+
+        // 남은 증강 중 무작위로 하나 선택
+        const randomIndex = Math.floor(Math.random() * unusedAugments.length);
+        const targetAugment = unusedAugments[randomIndex];
+
+        // 얕은 복사를 통해 내 증강 배열에 추가하되, 사용할 수는 없도록 isUsed를 true로 설정
+        const myPeekIndex = player.augments.findIndex(a => a.id === augmentId && !a.isUsed);
+        if (myPeekIndex !== -1) {
+          player.augments[myPeekIndex] = {
+            ...targetAugment,
+            isUsed: true // 사용 불가 상태로 표시만 함
+          };
+        }
+
+        console.log(`[Peek] ${player.nickname} 님이 ${opponent.nickname} 님의 증강(${targetAugment.name})을 훔쳐봤습니다.`);
+
+        broadcastGameUpdate(io, room);
+        return;
       }
       else if (augmentId === 'confiscate') {
         // 상대의 증강 1개를 사용 상태로 만듭니다.
+        const opponent = Array.from(room.players.values()).find(p => p.email !== userEmail);
+        
+        if (!opponent) {
+          socket.emit('game:error', { message: '상대방 정보를 찾을 수 없습니다.' });
+          return;
+        }
+
+        // 상대방의 증강 중 아직 사용하지 않은 증강들 필터링
+        const unusedAugments = opponent.augments.filter(a => !a.isUsed);
+
+        if (unusedAugments.length === 0) {
+          socket.emit('game:error', { message: '상대방이 보유한 사용 가능한 증강이 없습니다.' });
+          return;
+        }
+
+        // 무작위로 증강 하나 선택
+        const randomIndex = Math.floor(Math.random() * unusedAugments.length);
+        const targetAugment = unusedAugments[randomIndex];
+
+        // 선택된 상대방의 증강을 강제로 사용 완료(isUsed = true) 처리
+        targetAugment.isUsed = true;
+
+        console.log(`[Confiscate] ${player.nickname} 님이 ${opponent.nickname} 님의 증강(${targetAugment.name})을 압수(사용 불가 처리)했습니다.`);
       }
       else if (augmentId === 'steal') {
         // 상대 증강 1개를 대신 사용합니다.
+        const opponent = Array.from(room.players.values()).find(p => p.email !== userEmail);
+        
+        if (!opponent) {
+          socket.emit('game:error', { message: '상대방 정보를 찾을 수 없습니다.' });
+          return;
+        }
+
+        // 상대방의 증강 중 아직 사용하지 않은 증강들 필터링
+        const unusedAugments = opponent.augments.filter(a => !a.isUsed);
+
+        if (unusedAugments.length === 0) {
+          socket.emit('game:error', { message: '상대방이 보유한 사용 가능한 증강이 없습니다.' });
+          return;
+        }
+
+        // 무작위로 증강 하나 선택
+        const randomIndex = Math.floor(Math.random() * unusedAugments.length);
+        const targetAugment = unusedAugments[randomIndex];
+
+        // 1. 상대방의 원본 증강은 사용 불가 상태(압수)로 변경
+        targetAugment.isUsed = true;
+
+        // 2. 훔친 증강을 내 인벤토리에 적용
+        const myStealIndex = player.augments.findIndex(a => a.id === augmentId && !a.isUsed);
+        if (myStealIndex !== -1) {
+          player.augments[myStealIndex] = {
+            ...targetAugment,
+            isUsed: false
+          };
+        }
+
+        console.log(`[Steal] ${player.nickname} 님이 ${opponent.nickname} 님의 증강(${targetAugment.name})을 훔쳤습니다.`);
+        broadcastGameUpdate(io, room);
+        return;
       }
       else if (augmentId === 'bombardment') {
         // 랜덤한 위치에 랜덤한 돌 5개를 둡니다.
