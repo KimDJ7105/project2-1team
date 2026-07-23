@@ -24,6 +24,7 @@ export class GameRoom {
   public turnCount: number = 1;
   // 증강 선택을 대기 중인 플레이어 이메일 목록
   public pendingAugmentPlayers: Set<string> = new Set();
+  public pendingAugmentOptions: Map<string, any[]> = new Map();
   public sealedCells: { x: number; y: number; turnsRemaining: number }[] = [];
   public hiddenStones: { x: number; y: number; email: string; turnsRemaining: number }[] = [];
   public lastMoves: { black: { x: number; y: number } | null; white: { x: number; y: number } | null } = { black: null, white: null };
@@ -211,6 +212,7 @@ export class GameRoom {
 
   public triggerAugmentSelection(io: any): void {
     this.pendingAugmentPlayers.clear();
+    this.pendingAugmentOptions.clear();
 
     for (const player of this.players.values()) {
       this.pendingAugmentPlayers.add(player.email);
@@ -223,6 +225,9 @@ export class GameRoom {
       // 무작위로 섞어서 3개 추출
       const shuffled = [...availableAugments].sort(() => Math.random() - 0.5);
       const selectedOptions = shuffled.slice(0, 3);
+
+      // 생성된 옵션을 메모리에 저장
+      this.pendingAugmentOptions.set(player.email, selectedOptions);
 
       // 개별 소켓으로 증강 선택지 3개 발송
       io.to(player.socketId).emit('game:augment:select', {

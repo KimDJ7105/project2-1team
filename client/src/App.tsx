@@ -95,6 +95,7 @@ export default function App() {
   }, []);
 
   // 2. 소켓 연결 로직
+  // 2. 소켓 연결 로직
   useEffect(() => {
     if (!user) return;
     if (!profileLoaded) return; // 프로필이 로드된 이후에만 소켓 연결
@@ -123,8 +124,41 @@ export default function App() {
       console.error(`[소켓 연결 에러]: ${err.message}`);
     });
 
-    socketInstance.on('disconnect', () => {
-      console.log('[소켓 연결 종료]');
+    // 서버가 강제로 소켓 연결을 끊었을 때의 처리를 추가합니다.
+    socketInstance.on('disconnect', (reason) => {
+      console.log(`[소켓 연결 종료] 사유: ${reason}`);
+      
+      if (reason === 'io server disconnect') {
+        alert('다른 탭이나 기기에서 접속하여 기존 연결이 종료되었습니다. 안전을 위해 로그아웃됩니다.');
+        
+        // 브라우저에 남은 세션 정보와 상태를 초기화하여 로그인 화면으로 강제 이동시킵니다.
+        sessionStorage.removeItem('token');
+        sessionStorage.removeItem('currentRoom');
+        sessionStorage.removeItem('isPlaying');
+        setUser(null);
+        setCurrentRoom(null);
+        setIsPlaying(false);
+      }
+    });
+
+    // 서버에서 보내는 강제 종료 에러 메시지가 개별 페이지의 알림과 중복되지 않도록 전역에서 가로챕니다.
+    socketInstance.on('game:error', (data: { message: string }) => {
+      if (data.message.includes('다른 탭이나 기기')) {
+        console.log('[중복 접속 오류 수신]', data.message);
+      }
+    });
+
+    // 서버로부터 재연결 이벤트를 받으면 진행 중이던 방과 게임 상태로 즉시 복구
+    socketInstance.on('room:reconnect', (data: { roomId: string; roomTitle: string; status: string }) => {
+      console.log('[App] 탭 종료 후 재접속 감지. 기존 방으로 복귀합니다:', data);
+      
+      const roomObj = { roomId: data.roomId, roomTitle: data.roomTitle };
+      setCurrentRoom(roomObj);
+      sessionStorage.setItem('currentRoom', JSON.stringify(roomObj));
+
+      const playing = data.status === 'playing';
+      setIsPlaying(playing);
+      sessionStorage.setItem('isPlaying', String(playing));
     });
 
     setSocket(socketInstance);

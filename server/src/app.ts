@@ -19,6 +19,9 @@ import { gameRecordRepositoryImpl } from "./repositories/mysqlGameRecordReposito
 import { AUGMENT_MAP } from './shared/data/augments';
 import { userRepository, userStateRepository } from './repositories';
 
+// 활성화된 소켓을 추적할 map
+const activeSockets = new Map<string, string>();
+
 const app = express();
 
 // JSON 요청 본문을 해석하기 위한 미들웨어 설정 (필수!)
@@ -214,7 +217,21 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     }
   };
 
-  console.log(`[Server] 유저 ${userNickname}(${userEmail}) 님이 무전기 채널에 접속했습니다! (소켓 ID: ${socket.id})`);
+  // 중복 로그인 감지 및 기존 소켓 연결 강제 종료 로직
+  if (userEmail) {
+    const existingSocketId = activeSockets.get(userEmail);
+    if (existingSocketId && existingSocketId !== socket.id) {
+      console.log(`[중복 접속 감지] ${userNickname}(${userEmail}) 님의 기존 연결을 종료합니다.`);
+      
+      const oldSocket = io.sockets.sockets.get(existingSocketId);
+      if (oldSocket) {
+        oldSocket.emit('game:error', { message: '다른 탭이나 기기에서 접속하여 기존 연결이 종료되었습니다.' });
+        oldSocket.disconnect(true);
+      }
+    }
+    // 새로운 소켓 ID로 갱신
+    activeSockets.set(userEmail, socket.id);
+  }
   
   // 새로고침 등으로 5초 이내에 재연결된 경우 타이머 취소
   if (userEmail && disconnectTimerManager.has(userEmail)) {
@@ -222,21 +239,35 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     console.log(`[세션 유지] ${userNickname}(${userEmail}) 님 재연결 감지 (삭제 예약 취소)`);
   }
 
-  // 클라이언트가 'test_click'이라는 신호를 무전으로 보냈을 때 반응하는 곳
-  socket.on('test_click', (data) => {
-    console.log(`[Server] 클라이언트가 보낸 메시지 수신:`, data);
-    
-    // 신호를 잘 받았다고 다시 클라이언트에게 응답
-    socket.emit('test_response', {
-      message: '백엔드 서버가 무전을 잘 수신하고 응답합니다! Hello World!'
-    });
-  });
+  // 재접속 시 방에 참여 중인지 확인하고 클라이언트에게 재연결 이벤트 전송 추가
+  if (userEmail) {
+    const allRooms = gameRoomManager.getAllRooms();
+    for (const room of allRooms) {
+      const player = Array.from(room.players.values()).find(p => p.email === userEmail);
+      if (player) {
+        player.socketId = socket.id;
+        socket.join(room.roomId);
+
+        socket.emit('room:reconnect', {
+          roomId: room.roomId,
+          roomTitle: room.roomTitle,
+          status: room.status
+        });
+        break;
+      }
+    }
+  }
 
   // 접속이 끊겼을 때
   socket.on('disconnect', async () => {
     console.log(`[Server] 유저 ${userNickname} 님의 접속이 끊겼습니다. (소켓 ID: ${socket.id})`);
 
     if (!userEmail) return;
+
+    // 현재 끊어지는 소켓이 최신 활성 소켓인 경우에만 맵에서 제거
+    if (userEmail && activeSockets.get(userEmail) === socket.id) {
+      activeSockets.delete(userEmail);
+    }
 
     // 즉시 방에서 퇴장시키지 않고 5초의 유예 시간(타이머) 안에 처리
     const timer = setTimeout(async () => {
@@ -264,6 +295,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
                   message: `${player.nickname} 님의 연결 종료(도망)로 승리했습니다!`
                 });
 
+                // DB 작업 
                 try {
                   await userStateRepositoryImpl.applyGameResult(winner.userId, 'win', 10);
                   await userStateRepositoryImpl.applyGameResult(player.userId, 'lose', -10);
@@ -589,19 +621,16 @@ io.on('connection', (socket: AuthenticatedSocket) => {
         socket.join(roomId);
       }
 
-      {
-        const playersForLog = Array.from(room.players.values()).map((p: any) => ({ email: p.email, nickname: p.nickname, hasProfileImage: Boolean(p.profileImage) }));
-        console.debug('[game:sync:response] players:', playersForLog);
+      broadcastGameUpdate(io, room, { status: room.status });
+
+      // 증강 선택 대기 중인 유저가 동기화를 요청한 경우 선택지 재전송
+      if (userEmail && room.pendingAugmentPlayers.has(userEmail)) {
+        const options = room.pendingAugmentOptions.get(userEmail);
+        if (options) {
+          socket.emit('game:augment:select', { options });
+        }
       }
-      socket.emit('game:sync:response', {
-        roomId: room.roomId,
-        status: room.status,
-        turn: room.currentTurn,
-        turnCount: room.turnCount,
-        board: room.board,
-        players: Array.from(room.players.values()),
-        sealedCells: room.sealedCells,
-      });
+
       console.log(`[GameSync] ${socket.user?.nickname ?? userNickname} 님의 게임 상태 동기화 완료 (방 ID: ${roomId})`);
     } catch (err) {
       console.error('game:sync 처리 에러:', err);
@@ -639,15 +668,6 @@ io.on('connection', (socket: AuthenticatedSocket) => {
 
       // 착수 성공 시 방 전체 플레이어에게 게임 상태 브로드캐스트
       broadcastGameUpdate(io, room, { x, y, color: result.color });
-      // io.to(roomId).emit('game:update', {
-      //   x,
-      //   y,
-      //   color: result.color,
-      //   currentTurn: room.currentTurn,
-      //   turnCount: room.turnCount,
-      //   board: room.board,
-      //   players: Array.from(room.players.values())
-      // });
 
       // 승리 조건이 달성된 경우 게임 종료 이벤트 발송
       if (result.isWin) {
