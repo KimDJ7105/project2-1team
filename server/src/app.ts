@@ -213,8 +213,6 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       };
     }
   };
-
-  console.log(`[Server] 유저 ${userNickname}(${userEmail}) 님이 무전기 채널에 접속했습니다! (소켓 ID: ${socket.id})`);
   
   // 새로고침 등으로 5초 이내에 재연결된 경우 타이머 취소
   if (userEmail && disconnectTimerManager.has(userEmail)) {
@@ -222,15 +220,24 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     console.log(`[세션 유지] ${userNickname}(${userEmail}) 님 재연결 감지 (삭제 예약 취소)`);
   }
 
-  // 클라이언트가 'test_click'이라는 신호를 무전으로 보냈을 때 반응하는 곳
-  socket.on('test_click', (data) => {
-    console.log(`[Server] 클라이언트가 보낸 메시지 수신:`, data);
-    
-    // 신호를 잘 받았다고 다시 클라이언트에게 응답
-    socket.emit('test_response', {
-      message: '백엔드 서버가 무전을 잘 수신하고 응답합니다! Hello World!'
-    });
-  });
+  // 재접속 시 방에 참여 중인지 확인하고 클라이언트에게 재연결 이벤트 전송 추가
+  if (userEmail) {
+    const allRooms = gameRoomManager.getAllRooms();
+    for (const room of allRooms) {
+      const player = Array.from(room.players.values()).find(p => p.email === userEmail);
+      if (player) {
+        player.socketId = socket.id;
+        socket.join(room.roomId);
+
+        socket.emit('room:reconnect', {
+          roomId: room.roomId,
+          roomTitle: room.roomTitle,
+          status: room.status
+        });
+        break;
+      }
+    }
+  }
 
   // 접속이 끊겼을 때
   socket.on('disconnect', async () => {
@@ -602,6 +609,14 @@ io.on('connection', (socket: AuthenticatedSocket) => {
         players: Array.from(room.players.values()),
         sealedCells: room.sealedCells,
       });
+
+      if (userEmail && room.pendingAugmentPlayers.has(userEmail)) {
+        const options = room.pendingAugmentOptions.get(userEmail);
+        if (options) {
+          socket.emit('game:augment:select', { options });
+        }
+      }
+
       console.log(`[GameSync] ${socket.user?.nickname ?? userNickname} 님의 게임 상태 동기화 완료 (방 ID: ${roomId})`);
     } catch (err) {
       console.error('game:sync 처리 에러:', err);

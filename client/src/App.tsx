@@ -127,6 +127,19 @@ export default function App() {
       console.log('[소켓 연결 종료]');
     });
 
+    // 서버로부터 재연결 이벤트를 받으면 진행 중이던 방과 게임 상태로 즉시 복구
+    socketInstance.on('room:reconnect', (data: { roomId: string; roomTitle: string; status: string }) => {
+      console.log('[App] 탭 종료 후 재접속 감지. 기존 방으로 복귀합니다:', data);
+      
+      const roomObj = { roomId: data.roomId, roomTitle: data.roomTitle };
+      setCurrentRoom(roomObj);
+      sessionStorage.setItem('currentRoom', JSON.stringify(roomObj));
+
+      const playing = data.status === 'playing';
+      setIsPlaying(playing);
+      sessionStorage.setItem('isPlaying', String(playing));
+    });
+
     setSocket(socketInstance);
 
     return () => {
