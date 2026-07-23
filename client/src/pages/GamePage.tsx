@@ -26,6 +26,7 @@ interface PlayerInfo {
   color: 'black' | 'white';
   isReady?: boolean;
   augments?: any[];
+  activeEffects?: { id: string; turnsRemaining: number }[];
 }
 
 const augmentIconMap: Record<string, string> = {
@@ -34,6 +35,8 @@ const augmentIconMap: Record<string, string> = {
   meteor: '☄️', different_game: '🧩', peek: '👁️', confiscate: '🔒',
   steal: '🦹', bombardment: '💣', table_flip: '┻━┻', undo: '⏪'
 };
+
+const chaosColors = ['color-red', 'color-green', 'color-yellow', 'color-blue', 'color-purple'];
 
 export const GamePage: React.FC<GamePageProps> = ({
   socket,
@@ -60,6 +63,7 @@ export const GamePage: React.FC<GamePageProps> = ({
   const [augmentTargetMode, setAugmentTargetMode] = useState<any | null>(null);
   const [sealedCells, setSealedCells] = useState<{ x: number; y: number; turnsRemaining: number }[]>([]);
   const [myHiddenStones, setMyHiddenStones] = useState<{ x: number; y: number; turnsRemaining: number }[]>([]);
+  const [playersArray, setPlayersArray] = useState<PlayerInfo[]>([]);
 
   // 서버의 2차원 보드 데이터를 돌 객체 배열로 변환
   const parseBoardToStones = (board: any[][]): Stone[] => {
@@ -96,6 +100,8 @@ export const GamePage: React.FC<GamePageProps> = ({
     // 플레이어 색상 및 정보 동기화를 담당하는 함수 (불변 값인 email과 nickname을 1, 2순위로 탐색)
     const syncPlayersInfo = (players: PlayerInfo[]) => {
       if (!players || !Array.isArray(players)) return;
+
+      setPlayersArray(players);
 
       const me = players.find((p: PlayerInfo) => 
         (user?.email && p.email === user.email) ||
@@ -435,10 +441,20 @@ export const GamePage: React.FC<GamePageProps> = ({
                 </div>
               );
             }
+            
+            const myPlayerInfo = playersArray.find((p: any) => p.color === myColor);
+            const isChaosActive = myPlayerInfo?.activeEffects?.some((e: any) => e.id === 'chaos_party') || false;
+
+            let colorClass = stone.color === 'black' ? 'b' : 'w';
+
+            if (isChaosActive) {
+              const colorIndex = (stone.x * 7 + stone.y * 13) % chaosColors.length;
+              colorClass = chaosColors[colorIndex];
+            }
 
             // 공백 방지 
             const isMyHidden = myHiddenStones.some(hs => hs.x === stone.x && hs.y === stone.y);
-            const stoneClass = `stone ${stone.color === 'black' ? 'b' : 'w'}${stone.isAugmented ? ' aug' : ''}`;
+            const stoneClass = `stone ${colorClass}${stone.isAugmented ? ' aug' : ''}`;
             return (
               <div
                 key={idx}
