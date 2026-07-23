@@ -7,6 +7,7 @@ import { getGameRecords } from '../../api/gameRecordApi';
 interface HistoryViewProps {
   onBackClick: () => void;
   onProfileClick: () => void;
+  userId: number;
 }
 
 interface GameRecord {
@@ -28,23 +29,29 @@ const badgeLabel: Record<string, string> = {
   draw: '무',
 };
 
-export default function HistoryView({ onBackClick, onProfileClick }: HistoryViewProps) {
+export default function HistoryView({ onBackClick, onProfileClick, userId }: HistoryViewProps) {
   const [selectedGame, setSelectedGame] = useState<GameRecord | null>(null);
 const [history, setHistory] = useState<GameRecord[]>([]);
  
 useEffect(() => {
-  const userId = 1;
-
   getGameRecords(userId)
     .then((data) => {
       console.log("전적 데이터:", data);
-      setHistory(data);
+
+      const formatted = data.map((item: any) => ({
+        id: item.gameId,
+        result: item.result,
+        opponent: item.opponentNickname,
+        turns: item.totalTurn,
+      }));
+
+      setHistory(formatted);
     })
     .catch((error) => {
       console.error("전적 조회 실패:", error);
     });
 
-}, []);
+}, [userId]);
 
 
   if (selectedGame) {

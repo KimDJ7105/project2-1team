@@ -1,6 +1,8 @@
 export interface GameRecordList {
   gameId: number;
 
+  roomTitle: string;
+  
   result: "win" | "lose" | "draw";
 
   opponentNickname: string;
@@ -45,6 +47,7 @@ export interface GameRecordRepository {
 
   // 대국 종료 후 기록 저장
   saveGameRecord(data: {
+    roomTitle: string;
     blackUserId: number;
     whiteUserId: number;
     winnerUserId: number | null;

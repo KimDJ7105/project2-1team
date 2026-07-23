@@ -148,6 +148,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout, on
       <HistoryView
         onBackClick={() => setActiveScreen('home')}
         onProfileClick={() => setActiveScreen('profile')}
+        userId={user.userId}
       />
     );
   }

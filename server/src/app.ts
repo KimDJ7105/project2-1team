@@ -533,6 +533,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
           if (blackPlayer && whitePlayer && winner) {
             // 대국 기록 저장
             await gameRecordRepositoryImpl.saveGameRecord({
+              roomTitle: room.roomTitle,
               blackUserId: blackPlayer.userId,
               whiteUserId: whitePlayer.userId,
               winnerUserId: winner.userId,
@@ -1045,6 +1046,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
 
         if (blackPlayer && whitePlayer && winner) {
           await gameRecordRepositoryImpl.saveGameRecord({
+            roomTitle: room.roomTitle,
             blackUserId: blackPlayer.userId,
             whiteUserId: whitePlayer.userId,
             winnerUserId: winner.userId,
