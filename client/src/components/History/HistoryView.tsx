@@ -55,10 +55,11 @@ useEffect(() => {
 
 
   if (selectedGame) {
-    return (
-      <HistoryDetail
-        game={selectedGame}
-        onBackClick={() => setSelectedGame(null)}
+  return (
+    <HistoryDetail
+      gameId={selectedGame.id}
+      userId={userId}
+      onBackClick={() => setSelectedGame(null)}
       />
     );
   }

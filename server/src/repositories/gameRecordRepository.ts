@@ -2,7 +2,7 @@ export interface GameRecordList {
   gameId: number;
 
   roomTitle: string;
-  
+
   result: "win" | "lose" | "draw";
 
   opponentNickname: string;
@@ -54,5 +54,6 @@ export interface GameRecordRepository {
     boardState: string[][];
     endReason: string;
     totalTurn: number;
+    selectedAugment?: { black: string[]; white: string[] };
   }): Promise<void>;
 }

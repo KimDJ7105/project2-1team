@@ -539,7 +539,11 @@ io.on('connection', (socket: AuthenticatedSocket) => {
               winnerUserId: winner.userId,
               boardState: room.board,
               endReason: "WIN",
-              totalTurn: room.turnCount
+              totalTurn: room.turnCount,
+              selectedAugment: {
+                black: blackPlayer.augments.map((a) => a.id),
+                white: whitePlayer.augments.map((a) => a.id)
+              }
             });
 
             // 승자 전적 반영
@@ -1052,7 +1056,11 @@ io.on('connection', (socket: AuthenticatedSocket) => {
             winnerUserId: winner.userId,
             boardState: room.board,
             endReason: "SURRENDER",
-            totalTurn: room.turnCount
+            totalTurn: room.turnCount,
+            selectedAugment: {
+              black: blackPlayer.augments.map((a) => a.id),
+              white: whitePlayer.augments.map((a) => a.id)
+            }
           });
 
           await userStateRepositoryImpl.applyGameResult(winner.userId, 'win', 10);

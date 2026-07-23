@@ -120,6 +120,7 @@ async saveGameRecord(data: {
   boardState: string[][];
   endReason: string;
   totalTurn: number;
+  selectedAugment?: { black: string[]; white: string[] };
 }): Promise<void> {
 
   const pool = getDbPool();
@@ -134,10 +135,11 @@ async saveGameRecord(data: {
       boardState,
       endReason,
       totalTurn,
+      selectedAugment,
       startedAt,
       endedAt
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
   `;
 
   await pool.query(query, [
@@ -147,7 +149,8 @@ async saveGameRecord(data: {
     data.winnerUserId,
     JSON.stringify(data.boardState),
     data.endReason,
-    data.totalTurn
+    data.totalTurn,
+    JSON.stringify(data.selectedAugment ?? { black: [], white: [] })
   ]);
 }
 
