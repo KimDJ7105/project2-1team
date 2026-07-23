@@ -1,5 +1,6 @@
 // client/src/components/History/HistoryDetail.tsx
 import { useState, useEffect } from 'react';
+import ProfileAvatar from '../Profile/ProfileAvatar';
 import { getGameRecordDetail } from '../../api/gameRecordApi';
 import '../../assets/styles/GameStyles.css';
 
@@ -114,14 +115,14 @@ export default function HistoryDetail({ gameId, userId, onBackClick }: HistoryDe
 
         <div className="row" style={{ justifyContent: 'center', gap: '16px', marginTop: '4px' }}>
           <div style={{ textAlign: 'center' }}>
-            <div className="avatar">🦁</div>
+            <ProfileAvatar src={isMeBlack ? detail.blackProfileImage ?? null : detail.whiteProfileImage ?? null} fallback="🦁" />
             <span className="muted" style={{ fontSize: '12px' }}>{myNickname} (나)</span>
           </div>
           <span className="badge" style={{ fontSize: '13px', padding: '3px 10px' }}>
             {resultLabel[result]}
           </span>
           <div style={{ textAlign: 'center' }}>
-            <div className="avatar">☁️</div>
+            <ProfileAvatar src={isMeBlack ? detail.whiteProfileImage ?? null : detail.blackProfileImage ?? null} fallback="☁️" />
             <span className="muted" style={{ fontSize: '12px' }}>{opponentNickname}</span>
           </div>
         </div>
