@@ -271,6 +271,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
                   message: `${player.nickname} 님의 연결 종료(도망)로 승리했습니다!`
                 });
 
+                // DB 작업 
                 try {
                   await userStateRepositoryImpl.applyGameResult(winner.userId, 'win', 10);
                   await userStateRepositoryImpl.applyGameResult(player.userId, 'lose', -10);
@@ -596,20 +597,22 @@ io.on('connection', (socket: AuthenticatedSocket) => {
         socket.join(roomId);
       }
 
-      {
-        const playersForLog = Array.from(room.players.values()).map((p: any) => ({ email: p.email, nickname: p.nickname, hasProfileImage: Boolean(p.profileImage) }));
-        console.debug('[game:sync:response] players:', playersForLog);
-      }
-      socket.emit('game:sync:response', {
-        roomId: room.roomId,
-        status: room.status,
-        turn: room.currentTurn,
-        turnCount: room.turnCount,
-        board: room.board,
-        players: Array.from(room.players.values()),
-        sealedCells: room.sealedCells,
-      });
+      broadcastGameUpdate(io, room, { status: room.status });
+      // {
+      //   const playersForLog = Array.from(room.players.values()).map((p: any) => ({ email: p.email, nickname: p.nickname, hasProfileImage: Boolean(p.profileImage) }));
+      //   console.debug('[game:sync:response] players:', playersForLog);
+      // }
+      // socket.emit('game:sync:response', {
+      //   roomId: room.roomId,
+      //   status: room.status,
+      //   turn: room.currentTurn,
+      //   turnCount: room.turnCount,
+      //   board: room.board,
+      //   players: Array.from(room.players.values()),
+      //   sealedCells: room.sealedCells,
+      // });
 
+      // 증강 선택 대기 중인 유저가 동기화를 요청한 경우 선택지 재전송
       if (userEmail && room.pendingAugmentPlayers.has(userEmail)) {
         const options = room.pendingAugmentOptions.get(userEmail);
         if (options) {
@@ -654,15 +657,6 @@ io.on('connection', (socket: AuthenticatedSocket) => {
 
       // 착수 성공 시 방 전체 플레이어에게 게임 상태 브로드캐스트
       broadcastGameUpdate(io, room, { x, y, color: result.color });
-      // io.to(roomId).emit('game:update', {
-      //   x,
-      //   y,
-      //   color: result.color,
-      //   currentTurn: room.currentTurn,
-      //   turnCount: room.turnCount,
-      //   board: room.board,
-      //   players: Array.from(room.players.values())
-      // });
 
       // 승리 조건이 달성된 경우 게임 종료 이벤트 발송
       if (result.isWin) {
