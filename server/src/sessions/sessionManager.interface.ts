@@ -18,9 +18,14 @@ export interface ISessionManager {
   // 세션 일부 필드만 갱신하되 기존 TTL은 유지
   updateSession(sessionId: string, updates: Record<string, any>): Promise<void>;
 
-  // [추가] 방 목록 조회용 (Redis Hash 전체 가져오기)
+  // 방 목록 조회용 (Redis Hash 전체 가져오기)
   getAllRooms(): Promise<string[]>;
 
-  // [추가] 방 생성/저장용
+  // 방 생성/저장용
   saveRoom(roomId: string, roomData: Record<string, any>): Promise<void>;
+
+  // 중복 로그인 방지용 소켓 처리 
+  getActiveSocket(email: string): Promise<string | null>;
+  setActiveSocket(email: string, socketId: string): Promise<void>;
+  deleteActiveSocket(email: string, socketId: string): Promise<void>;
 }

@@ -140,6 +140,24 @@ export class RedisSessionManager implements ISessionManager {
     await this.redisClient.del(`gameroom:${roomId}`);
   }
 
+  // 현재 접속 중인 소켓 ID 조회
+  async getActiveSocket(email: string): Promise<string | null> {
+    return await this.redisClient.get(`user_socket:${email}`);
+  }
+
+  // 새로운 소켓 ID 저장
+  async setActiveSocket(email: string, socketId: string): Promise<void> {
+    await this.redisClient.set(`user_socket:${email}`, socketId);
+  }
+
+  // 소켓 ID 삭제 (현재 소켓 ID와 일치할 때만 삭제)
+  async deleteActiveSocket(email: string, socketId: string): Promise<void> {
+    const current = await this.getActiveSocket(email);
+    if (current === socketId) {
+      await this.redisClient.del(`user_socket:${email}`);
+    }
+  }
+
 }
 
 //싱글톤

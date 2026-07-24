@@ -23,9 +23,6 @@ import { userRepository, userStateRepository } from './repositories';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { createClient } from 'redis';
 
-// 활성화된 소켓을 추적할 map
-const activeSockets = new Map<string, string>();
-
 const app = express();
 
 // JSON 요청 본문을 해석하기 위한 미들웨어 설정 (필수!)
@@ -223,18 +220,26 @@ io.on('connection', (socket: AuthenticatedSocket) => {
 
   // 중복 로그인 감지 및 기존 소켓 연결 강제 종료 로직
   if (userEmail) {
-    const existingSocketId = activeSockets.get(userEmail);
-    if (existingSocketId && existingSocketId !== socket.id) {
-      console.log(`[중복 접속 감지] ${userNickname}(${userEmail}) 님의 기존 연결을 종료합니다.`);
-      
-      const oldSocket = io.sockets.sockets.get(existingSocketId);
-      if (oldSocket) {
-        oldSocket.emit('game:error', { message: '다른 탭이나 기기에서 접속하여 기존 연결이 종료되었습니다.' });
-        oldSocket.disconnect(true);
+    (async () => {
+      try {
+        const existingSocketId = await redisSessionManager.getActiveSocket(userEmail);
+        
+        if (existingSocketId && existingSocketId !== socket.id) {
+          console.log(`[중복 접속 감지] ${userNickname}(${userEmail}) 님의 기존 연결을 종료합니다. (old: ${existingSocketId})`);
+          
+          // Socket.io Redis Adapter가 세팅되어 있으므로, 다른 Pod에 연결된 소켓이라도 메세지 전송 및 종료가 가능합니다.
+          io.to(existingSocketId).emit('game:error', { message: '다른 탭이나 기기에서 접속하여 기존 연결이 종료되었습니다.' });
+          
+          // 기존 소켓 강제 종료 (Socket.io 4.0 이상 지원 기능)
+          io.in(existingSocketId).disconnectSockets(true);
+        }
+        
+        // 새로운 소켓 ID로 갱신
+        await redisSessionManager.setActiveSocket(userEmail, socket.id);
+      } catch (err) {
+        console.error('중복 로그인 처리 중 에러:', err);
       }
-    }
-    // 새로운 소켓 ID로 갱신
-    activeSockets.set(userEmail, socket.id);
+    })();
   }
   
   // 새로고침 등으로 5초 이내에 재연결된 경우 타이머 취소
@@ -280,9 +285,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     if (!userEmail) return;
 
     // 현재 끊어지는 소켓이 최신 활성 소켓인 경우에만 맵에서 제거
-    if (userEmail && activeSockets.get(userEmail) === socket.id) {
-      activeSockets.delete(userEmail);
-    }
+    await redisSessionManager.deleteActiveSocket(userEmail, socket.id);
 
     // 즉시 방에서 퇴장시키지 않고 5초의 유예 시간(타이머) 안에 처리
     const timer = setTimeout(async () => {
@@ -1536,6 +1539,8 @@ async function startServer() {
       pubClient.connect(),
       subClient.connect()
     ]);
+
+    io.adapter(createAdapter(pubClient, subClient));
 
     const PORT = 8080;
     httpServer.listen(PORT, () => {
