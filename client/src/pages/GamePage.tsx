@@ -516,7 +516,7 @@ export const GamePage: React.FC<GamePageProps> = ({
                     onClick={() => handleAugmentClick(aug)}
                   >
                     <span style={{ fontSize: '20px' }}>{displayIcon ? displayIcon : '＋'}</span>
-                    {aug && <span style={{ fontSize: '9px', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}>{aug.name}</span>}
+                    {aug && <span style={{ fontSize: '12px', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}>{aug.name}</span>}
                 </div>
               );
             })}
