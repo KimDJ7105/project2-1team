@@ -45,6 +45,44 @@ jobs:
           push: true
           tags: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
 
+      # 사람이 버전을 직접 붙이지 않고, ECR에 있는 vX.Y.Z 태그 중 가장 높은
+      # 걸 찾아 patch 버전만 자동으로 +1 해서 계산함 (없으면 v1.0.0부터 시작)
+      - name: compute next semver tag from ECR
+        run: |
+          LATEST=$(aws ecr describe-images \
+            --repository-name "$ECR_REPOSITORY" \
+            --query 'imageDetails[].imageTags[]' \
+            --output text \
+            | tr '\t' '\n' \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+            | sort -V \
+            | tail -n1)
+
+          if [ -z "$LATEST" ]; then
+            NEXT_VERSION="v1.0.0"
+          else
+            IFS='.' read -r MAJOR MINOR PATCH <<< "${LATEST#v}"
+            NEXT_VERSION="v${MAJOR}.${MINOR}.$((PATCH + 1))"
+          fi
+
+          echo "NEXT_VERSION=$NEXT_VERSION" >> "$GITHUB_ENV"
+          echo "이전 버전: ${LATEST:-없음} -> 새 버전: $NEXT_VERSION" >> "$GITHUB_STEP_SUMMARY"
+
+      # 방금 push한 이미지(prod-<sha>, 진짜 기준)에 사람이 보기 편한
+      # 버전 태그를 별칭으로 붙임 (재빌드 없이 동일 이미지를 가리키게 함)
+      - name: tag image with computed semver alias
+        run: |
+          MANIFEST=$(aws ecr batch-get-image \
+            --repository-name "$ECR_REPOSITORY" \
+            --image-ids imageTag="$IMAGE_TAG" \
+            --query 'images[0].imageManifest' \
+            --output text)
+
+          aws ecr put-image \
+            --repository-name "$ECR_REPOSITORY" \
+            --image-tag "$NEXT_VERSION" \
+            --image-manifest "$MANIFEST"
+
       - name: update kubeconfig
         run: aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION"
 

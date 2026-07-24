@@ -13,6 +13,8 @@ data "aws_iam_openid_connect_provider" "github_actions" {
 # 배포 전용 IAM 역할
 # prod 브랜치에 대한 push로 트리거된 워크플로우만 이 역할을 assume할 수 있음
 # (pull_request로 트리거된 워크플로우는 sub 클레임 형식이 달라서 assume 불가)
+# 버전 태그는 사람이 push하는 게 아니라 deploy.yml이 배포 때마다 ECR 안에서
+# 자동으로 계산해서 붙이므로, 태그 push 트리거용 조건은 필요 없음
 # --------------------------------------------------
 data "aws_iam_policy_document" "github_actions_trust" {
   statement {
@@ -66,6 +68,7 @@ data "aws_iam_policy_document" "github_actions_ecr" {
       "ecr:InitiateLayerUpload",
       "ecr:UploadLayerPart",
       "ecr:CompleteLayerUpload",
+      "ecr:DescribeImages", # 배포 시 기존 vX.Y.Z 태그를 조회해 다음 버전을 자동 계산하기 위해 필요
     ]
     resources = [data.aws_ecr_repository.team1.arn]
   }
