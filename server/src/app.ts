@@ -6,17 +6,21 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import userRoutes from './routes/userRoutes'; // 라우터 가져오기
 import { socketAuthMiddleware, AuthenticatedSocket } from './sessions/socketAuth';
-import { disconnectTimerManager } from './sessions/disconnectTimerManager';
 import { redisSessionManager } from './sessions/redisSessionManager';
 import { SCRoomSummary } from './shared/types/game_data';
 import { gameRoomManager } from './rooms/GameRoom';
 import profileRoutes from './routes/profileRoutes';
+import { s3Service } from './services/s3Service';
 import activeConfig from './config/configLoader';
 import { userStateRepositoryImpl } from './repositories/mysqlUserStateRepository';
-import { userRepository, userStateRepository } from './repositories';
 import gameRecordRoutes from "./routes/gameRecordRoutes";
 import { gameRecordRepositoryImpl } from "./repositories/mysqlGameRecordRepository";
 import { AUGMENT_MAP } from './shared/data/augments';
+import { userRepository, userStateRepository } from './repositories';
+
+// redis adaptor 관련 
+import { createAdapter } from '@socket.io/redis-adapter';
+import { createClient } from 'redis';
 
 const app = express();
 
@@ -40,16 +44,72 @@ function broadcastGameUpdate(io: Server, room: any, extraData: object = {}) {
   const playersArray = Array.from(room.players.values()) as any[];
   // 플레이어 중 한 명이라도 activeEffects가 존재하는지 확인
   const hasActiveEffects = playersArray.some(p => p.activeEffects && p.activeEffects.length > 0);
+  const hasHiddenStones = room.hiddenStones && room.hiddenStones.length > 0;
 
-  if (hasActiveEffects) {
+  if (hasActiveEffects || hasHiddenStones) {
     // 상태이상(특수 효과)이 있는 경우: 각 플레이어마다 맞춤형으로 개별 전송
     for (const player of playersArray) {
-      // 나중에 필요에 따라 player마다 다른 보드나 상태를 필터링할 수 있는 확장 포인트
+      // 1. 원본 보드를 복사
+      const personalizedBoard = room.board.map((row: any) => [...row]);
+
+      // [전장의 안개] 효과 적용
+      const hasFog = player.activeEffects?.some((e: any) => e.id === 'fog_of_war');
+      if (hasFog) {
+        const myColor = player.color;
+        // 시야 확보 여부를 체크할 마스크 배열
+        const visibleMask = Array(15).fill(null).map(() => Array(15).fill(false));
+        const directions = [[0, 0], [-1, 0], [1, 0], [0, -1], [0, 1]]; // 내 돌과 상하좌우 4방향
+
+        // 내 돌을 찾아 시야 마스크 활성화
+        for (let y = 0; y < 15; y++) {
+          for (let x = 0; x < 15; x++) {
+            if (room.board[y][x] === myColor) {
+              for (const [dy, dx] of directions) {
+                const ny = y + dy;
+                const nx = x + dx;
+                if (ny >= 0 && ny < 15 && nx >= 0 && nx < 15) {
+                  visibleMask[ny][nx] = true;
+                }
+              }
+            }
+          }
+        }
+
+        // 시야가 닿지 않는 곳을 fog 처리
+        for (let y = 0; y < 15; y++) {
+          for (let x = 0; x < 15; x++) {
+            if (!visibleMask[y][x]) {
+              personalizedBoard[y][x] = 'fog'; // 클라이언트에서 이 문자열을 받아 안개 그래픽 렌더링
+            }
+          }
+        }
+      }
+
+      // [숨겨진 돌] 처리
+      if (hasHiddenStones) {
+        for (const hiddenStone of room.hiddenStones) {
+          if (hiddenStone.email !== player.email) {
+            // 전장의 안개로 이미 가려진 칸은 덮어쓸 필요 없음
+            if (personalizedBoard[hiddenStone.y][hiddenStone.x] !== 'fog') {
+              personalizedBoard[hiddenStone.y][hiddenStone.x] = '';
+            }
+          }
+        }
+      }
+
+      // 본인의 숨겨진 돌 위치를 클라이언트에 전달하기 위한 배열
+      const myHiddenStones = room.hiddenStones
+        ? room.hiddenStones.filter((s: any) => s.email === player.email)
+        : [];
+
       io.to(player.socketId).emit('game:update', {
         currentTurn: room.currentTurn,
         turnCount: room.turnCount,
-        board: room.board,
+        board: personalizedBoard,
         players: playersArray,
+        sealedCells: room.sealedCells,
+        myHiddenStones,
+        lastMoves: room.lastMoves,
         ...extraData
       });
     }
@@ -60,6 +120,8 @@ function broadcastGameUpdate(io: Server, room: any, extraData: object = {}) {
       turnCount: room.turnCount,
       board: room.board,
       players: playersArray,
+      sealedCells: room.sealedCells,
+      lastMoves: room.lastMoves,
       ...extraData
     });
   }
@@ -91,103 +153,149 @@ io.on('connection', (socket: AuthenticatedSocket) => {
   const userEmail = socket.user?.email;
   const userNickname = socket.user?.nickname;
 
-  console.log(`[Server] 유저 ${userNickname}(${userEmail}) 님이 무전기 채널에 접속했습니다! (소켓 ID: ${socket.id})`);
-  
-  // 새로고침 등으로 5초 이내에 재연결된 경우 타이머 취소
-  if (userEmail && disconnectTimerManager.has(userEmail)) {
-    disconnectTimerManager.clear(userEmail);
-    console.log(`[세션 유지] ${userNickname}(${userEmail}) 님 재연결 감지 (삭제 예약 취소)`);
+  // Helper: fetch latest session for this socket (nickname/profileImage), update socket.user
+  const fetchLatestSession = async () => {
+    try {
+      const token = socket.handshake.auth?.token;
+      if (!token || typeof token !== 'string') {
+        return {
+          nickname: socket.user?.nickname ?? userNickname ?? '',
+          profileImage: socket.user?.profileImage ?? null,
+        };
+      }
+
+      // 1) 먼저 Redis에 저장된 세션을 확인
+      const session = await redisSessionManager.getSession(String(token));
+
+      // 2) DB에서 최신 유저 정보를 가져옴
+      let dbUser = null;
+      try {
+        dbUser = await userRepository.findById(userId);
+      } catch (err) {
+        console.warn('DB 사용자 조회 실패:', (err as any)?.message ?? err);
+      }
+
+      // 3) DB에서 얻은 profileImage 키를 presigned URL로 변환(항상 우선)
+      let signedProfile: string | null = null;
+      try {
+        const profileKey = dbUser?.profileImage ?? session?.profileImage ?? socket.user?.profileImage ?? null;
+        signedProfile = await s3Service.getProfilePresignedGetUrl(profileKey ?? null);
+      } catch (err) {
+        console.warn('프로필 presign 변환 실패:', (err as any)?.message ?? err);
+      }
+
+      // 최신 nickname: DB 우선, 없으면 세션
+      const latestNickname = dbUser?.nickname ?? session?.nickname ?? socket.user?.nickname ?? userNickname ?? '';
+
+      // 4) Redis 세션을 최신화하여 nickname/profileImage를 보장
+      try {
+        await redisSessionManager.updateSession(String(token), {
+          nickname: latestNickname,
+          profileImage: signedProfile,
+        });
+      } catch (err) {
+        console.warn('세션 업데이트 실패:', (err as any)?.message ?? err);
+      }
+
+      // 5) socket.user 업데이트
+      socket.user = {
+        userId: session?.userId ?? socket.user?.userId,
+        email: session?.email ?? socket.user?.email,
+        nickname: latestNickname,
+        profileImage: signedProfile ?? socket.user?.profileImage ?? null,
+      } as any;
+
+      return {
+        nickname: latestNickname,
+        profileImage: signedProfile ?? socket.user?.profileImage ?? null,
+      };
+    } catch (err) {
+      return {
+        nickname: socket.user?.nickname ?? userNickname ?? '',
+        profileImage: socket.user?.profileImage ?? null,
+      };
+    }
+  };
+
+  // 중복 로그인 감지 및 기존 소켓 연결 강제 종료 로직
+  if (userEmail) {
+    (async () => {
+      try {
+        const existingSocketId = await redisSessionManager.getActiveSocket(userEmail);
+        
+        if (existingSocketId && existingSocketId !== socket.id) {
+          console.log(`[중복 접속 감지] ${userNickname}(${userEmail}) 님의 기존 연결을 종료합니다. (old: ${existingSocketId})`);
+          
+          // Socket.io Redis Adapter가 세팅되어 있으므로, 다른 Pod에 연결된 소켓이라도 메세지 전송 및 종료가 가능합니다.
+          io.to(existingSocketId).emit('game:error', { message: '다른 탭이나 기기에서 접속하여 기존 연결이 종료되었습니다.' });
+          
+          // 기존 소켓 강제 종료 (Socket.io 4.0 이상 지원 기능)
+          io.in(existingSocketId).disconnectSockets(true);
+        }
+        
+        // 새로운 소켓 ID로 갱신
+        await redisSessionManager.setActiveSocket(userEmail, socket.id);
+
+        // 새로고침 등으로 5초 이내에 재연결된 경우 타이머 취소
+        await redisSessionManager.clearDisconnectTimer(userEmail);
+        console.log(`[세션 유지] ${userNickname}(${userEmail}) 님 재연결 감지 (삭제 예약 취소)`);
+
+      } catch (err) {
+        console.error('중복 로그인 처리 중 에러:', err);
+      }
+    })();
   }
 
-  // 클라이언트가 'test_click'이라는 신호를 무전으로 보냈을 때 반응하는 곳
-  socket.on('test_click', (data) => {
-    console.log(`[Server] 클라이언트가 보낸 메시지 수신:`, data);
-    
-    // 신호를 잘 받았다고 다시 클라이언트에게 응답
-    socket.emit('test_response', {
-      message: '백엔드 서버가 무전을 잘 수신하고 응답합니다! Hello World!'
-    });
-  });
+  // 재접속 시 방에 참여 중인지 확인하고 클라이언트에게 재연결 이벤트 전송 추가
+  if (userEmail) {
+    (async () => {
+      try {
+        const roomId = await redisSessionManager.getUserRoom(userEmail);
+        
+        if (roomId) {
+          const roomInstance = await gameRoomManager.getRoom(roomId);
+          if (roomInstance && roomInstance.status !== 'finished') {
+            const player = Array.from(roomInstance.players.values()).find(p => p.email === userEmail);
+            if (player) {
+              player.socketId = socket.id;
+              socket.join(roomInstance.roomId);
+              await gameRoomManager.saveRoom(roomInstance);
+
+              socket.emit('room:reconnect', {
+                roomId: roomInstance.roomId,
+                roomTitle: roomInstance.roomTitle,
+                status: roomInstance.status
+              });
+              console.log(`[자동 방 복구] ${userNickname}(${userEmail}) 님이 진행 중인 방(${roomId})으로 자동 복구되었습니다.`);
+            }
+          } else {
+            // 방이 이미 폭파되었는데 유저 매핑 정보만 남은 경우 찌꺼기 삭제
+            await redisSessionManager.deleteUserRoom(userEmail);
+          }
+        }
+      } catch (err) {
+        console.error('재접속 방 검색 오류:', err);
+      }
+    })();
+  }
 
   // 접속이 끊겼을 때
   socket.on('disconnect', async () => {
     console.log(`[Server] 유저 ${userNickname} 님의 접속이 끊겼습니다. (소켓 ID: ${socket.id})`);
 
-    // 참여 중이던 방이 있는지 확인하고 퇴장 처리하여 유령 플레이어 방지
-    const allRooms = gameRoomManager.getAllRooms();
-    for (const room of allRooms) {
-      // Map의 values에서 현재 끊긴 소켓 ID나 이메일이 일치하는 유저가 있는지 확인
-      const player = Array.from(room.players.values()).find(
-        (p) => p.socketId === socket.id || (userEmail && p.email === userEmail)
-      );
-
-      if (player) {
-        console.log(`[Room] 접속 종료로 인한 방(${room.roomId}) 자동 퇴장 처리: ${player.nickname}`);
-        //leaveRoom 메서드가 내부적으로 소켓 ID를 대조해 플레이어를 제거하고, 0명이면 방을 삭제함
-        gameRoomManager.leaveRoom(room.roomId, player.socketId);
-        
-        // 남은 사람들에게 업데이트 알림
-        const remainingRoom = gameRoomManager.getRoom(room.roomId);
-        if (remainingRoom && remainingRoom.players.size > 0) {
-          io.to(room.roomId).emit('room:update', { players: Array.from(remainingRoom.players.values()) });
-          const updatedRoom = {
-            roomId: remainingRoom.roomId,
-            roomTitle: remainingRoom.roomTitle,
-            playerCount: remainingRoom.players.size,
-            status: remainingRoom.status
-          };
-          await redisSessionManager.saveRoom(room.roomId, updatedRoom);
-        } else {
-          // 남은 사람이 없으면 방 삭제
-          await redisSessionManager.deleteRoom(room.roomId);
-        }
-        
-        // 로비에 갱신된 방 목록 전송
-        const roomsData = await redisSessionManager.getAllRooms();
-        const roomList: SCRoomSummary[] = roomsData
-          .map((roomStr: string) => JSON.parse(roomStr) as SCRoomSummary)
-          .filter((r) => r.status !== 'finished');
-        io.emit('room:list', roomList);
-        break;
-      }
-    }
-
     if (!userEmail) return;
 
-    // 5초 대기 후 redisSessionManager를 통해 세션 및 인덱스 키 정상 파기
-    const timer = setTimeout(async () => {
-      try {
-        const sessionId = await redisSessionManager.getActiveSessionByEmail(userEmail);
-        if (sessionId) {
-          await redisSessionManager.destroySession(sessionId);
-          console.log(`[세션 정리 완료] 탭 종료 5초 경과로 세션 파기: ${userEmail}`);
-        }
-      } catch (error) {
-        console.error(`[세션 정리 오류]:`, error);
-      } finally {
-        disconnectTimerManager.clear(userEmail);
-      }
-    }, 5000);
+    // 현재 끊어지는 소켓이 최신 활성 소켓인 경우에만 맵에서 제거
+    await redisSessionManager.deleteActiveSocket(userEmail, socket.id);
 
-    disconnectTimerManager.set(userEmail, timer);
-  });
-
-  // 방 목록 조회 요청 처리
-  socket.on('room:list', async () => {
     try {
-      // 1. Redis에서 'game_rooms' 해시의 모든 값을 가져옴
-      // hvals는 방 ID를 키로 가진 모든 JSON 데이터(방 정보)를 배열로 반환
-      const roomsData = await redisSessionManager.getAllRooms();
-    
-      // 2. 문자열 데이터를 객체(SCRoomSummary)로 변환
-      const roomList: SCRoomSummary[] = roomsData
-        .map((data: string) => JSON.parse(data) as SCRoomSummary)
-        .filter((room) => room.status !== 'finished');
-    
-      // 3. 클라이언트에 전송
-      socket.emit('room:list', roomList);
+      // 로비에 있든 방에 있든 무조건 타이머가 돌아가도록 설정
+      const roomId = await redisSessionManager.getUserRoom(userEmail);
+      
+      // 속해있는 방이 없으면 'lobby'를 값으로 넣어 타이머 생성
+      await redisSessionManager.setDisconnectTimer(userEmail, roomId || 'lobby');
     } catch (err) {
-      console.error('방 목록 조회 실패:', err);
+      console.error('타이머 설정 중 오류:', err);
     }
   });
 
@@ -205,11 +313,24 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     // 방 제목과 난수를 조합하여 고유한 방 ID 생성
     const roomId = `${titleValue}_${randomId}`;
 
-    // 메모리에 룸 인스턴스 생성 및 생성자 참가 처리
-    const roomInstance = gameRoomManager.createRoom(roomId, titleValue);
-    if (userEmail && userNickname) {
+    // Redis에 방 정보 저장. 
+    const roomInstance = await gameRoomManager.createRoom(roomId, titleValue);
+    if (userEmail) {
       console.log('서버: 방 생성 성공 이벤트 발송 테스트', roomId);
-      roomInstance.addPlayer(userId, userEmail, userNickname, socket.id);
+      try {
+        const latest = await fetchLatestSession();
+        roomInstance.addPlayer(userId, userEmail, (latest.nickname ?? userEmail ?? ''), socket.id, latest.profileImage ?? null);
+      } catch (err) {
+        roomInstance.addPlayer(userId, userEmail, (socket.user?.nickname ?? userNickname ?? userEmail ?? ''), socket.id, socket.user?.profileImage ?? null);
+      }
+
+      if (userEmail) {
+        await redisSessionManager.setUserRoom(userEmail, roomId);
+      }
+
+      // 플레이어가 추가된 최신 방 상태를 Redis에 저장
+      await gameRoomManager.saveRoom(roomInstance);
+
       socket.join(roomId); // Socket.io 룸 채널 입장
     }
 
@@ -225,6 +346,10 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       roomId: roomId, 
       roomTitle: titleValue 
     });
+    {
+      const playersForLog = Array.from(roomInstance.players.values()).map((p: any) => ({ email: p.email, nickname: p.nickname, hasProfileImage: Boolean(p.profileImage) }));
+      console.debug('[room:update] players:', playersForLog);
+    }
     io.to(roomId).emit('room:update', { players: Array.from(roomInstance.players.values()) });
 
     // Redis에 방 데이터 저장
@@ -245,26 +370,47 @@ io.on('connection', (socket: AuthenticatedSocket) => {
 
   // 방 참가 이벤트 처리 
   socket.on('room:join', async (data: { roomId: string }) => {
+    const { roomId } = data;
+    const lockKey = `room_update:${roomId}`;
+    let locked = false;
+
     try {
-      const { roomId } = data;
       if (!userEmail || !userNickname) {
         socket.emit('room:join:fail', { message: '인증 정보가 없습니다.' });
         return;
       }
+      
+      locked = await redisSessionManager.acquireLockWithRetry(lockKey, 2);
+      if (!locked) {
+        socket.emit('room:join:fail', { message: '서버 혼잡으로 인해 처리가 지연되었습니다. 다시 시도해 주세요.' });
+        return;
+      }
 
-      // 1. 메모리에서 룸 인스턴스 조회
-      const roomInstance = gameRoomManager.getRoom(roomId);
+      const roomInstance = await gameRoomManager.getRoom(roomId);
       if (!roomInstance) {
         socket.emit('room:join:fail', { message: '존재하지 않거나 이미 종료된 방입니다.' });
         return;
       }
 
       // 2. 룸 인스턴스에 플레이어 추가 시도 (인원 초과 시 false 반환)
-      const success = roomInstance.addPlayer(userId, userEmail, userNickname, socket.id);
+      // 최신 세션을 다시 조회하여 nickname/profileImage를 재확인
+      let success = false;
+      try {
+        const latest = await fetchLatestSession();
+        success = roomInstance.addPlayer(userId, userEmail, (latest.nickname ?? userEmail ?? ''), socket.id, latest.profileImage ?? null);
+      } catch (err) {
+        success = roomInstance.addPlayer(userId, userEmail, (socket.user?.nickname ?? userNickname ?? userEmail ?? ''), socket.id, socket.user?.profileImage ?? null);
+      }
       if (!success) {
         socket.emit('room:join:fail', { message: '방 인원이 가득 찼습니다.' });
         return;
       }
+
+      // 플레이어와 룸 연결 정보를 저장 
+      await redisSessionManager.setUserRoom(userEmail, roomId);
+
+      // 플레이어가 추가된 최신 방 상태를 Redis에 저장
+      await gameRoomManager.saveRoom(roomInstance);
 
       // 3. Socket.io 룸 채널 입장
       socket.join(roomId);
@@ -283,6 +429,10 @@ io.on('connection', (socket: AuthenticatedSocket) => {
         roomId: roomInstance.roomId, 
         roomTitle: roomInstance.roomTitle 
       });
+      {
+        const playersForLog = Array.from(roomInstance.players.values()).map((p: any) => ({ email: p.email, nickname: p.nickname, hasProfileImage: Boolean(p.profileImage) }));
+        console.debug('[room:update] players:', playersForLog);
+      }
       io.to(roomId).emit('room:update', { players: Array.from(roomInstance.players.values()) });
     
       // 6. 전체 로비 유저들에게 변경된 인원수 반영을 위해 방 목록 다시 전송
@@ -296,117 +446,166 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     } catch (err) {
       console.error('방 입장 처리 중 오류:', err);
       socket.emit('room:join:fail', { message: '방 입장 처리 중 서버 오류가 발생했습니다.' });
+    } finally {
+      if (locked) {
+        await redisSessionManager.releaseLock(lockKey);
+      }
     }
   });
 
   // 준비 완료 이벤트 
-  socket.on('room:ready', ({ roomId }) => {
-    const room = gameRoomManager.getRoom(roomId);
-    if (!room) return;
+  socket.on('room:ready', async ({ roomId }) => {
+    const lockKey = `room_update:${roomId}`;
+    const locked = await redisSessionManager.acquireLockWithRetry(lockKey, 2);
+    if (!locked) return;
 
-    // Map 구조의 값들을 배열로 변환하여 소켓 ID로 플레이어 검색
-    const playersArray = Array.from(room.players.values());
-    const player = playersArray.find(p => p.socketId === socket.id);
-    if (player) {
-      player.isReady = !player.isReady; // 준비 취소도 가능하도록 토글
-    }
+    try {
+      const room = await gameRoomManager.getRoom(roomId);
+      if (!room) return;
 
-    // 방에 있는 모든 사람에게 현재 인원 및 준비 상태 브로드캐스트
-    io.to(roomId).emit('room:update', { players: Array.from(room.players.values()) });
+      // Map 구조의 값들을 배열로 변환하여 소켓 ID로 플레이어 검색
+      const playersArray = Array.from(room.players.values());
+      const player = playersArray.find(p => p.socketId === socket.id);
+      if (player) {
+        player.isReady = !player.isReady; // 준비 취소도 가능하도록 토글
+      }
 
-    // 2명이 모두 모였고, 2명 모두 준비 완료 상태인지 확인 (size와 every 사용)
-    const allReady = room.players.size === 2 && Array.from(room.players.values()).every(p => p.isReady);
-    if (allReady) {
-      // 게임 시작 상태로 변경 및 알림
-      room.status = 'playing';
-      room.turnCount = 1;
-      
-      // 1. 플레이어 목록을 배열로 가져옴
-      const roomPlayers = Array.from(room.players.values());
-      
-      // 2. 랜덤으로 선공(흑돌) 플레이어 선택
-      const firstPlayerIndex = Math.random() < 0.5 ? 0 : 1;
-      const secondPlayerIndex = firstPlayerIndex === 0 ? 1 : 0;
+      //redis에 방 정보 저장. 
+      await gameRoomManager.saveRoom(room);
 
-      // 3. 선공은 'black', 후공은 'white'로 색상 재배정
-      roomPlayers[firstPlayerIndex].color = 'black';
-      roomPlayers[secondPlayerIndex].color = 'white';
+      // 방에 있는 모든 사람에게 현재 인원 및 준비 상태 브로드캐스트
+      {
+        const playersForLog = Array.from(room.players.values()).map((p: any) => ({ email: p.email, nickname: p.nickname, hasProfileImage: Boolean(p.profileImage) }));
+        console.debug('[room:update] players:', playersForLog);
+      }
+      io.to(roomId).emit('room:update', { players: Array.from(room.players.values()) });
 
-      // 4. Map 데이터도 갱신된 색상으로 업데이트
-      room.players.set(roomPlayers[firstPlayerIndex].email, roomPlayers[firstPlayerIndex]);
-      room.players.set(roomPlayers[secondPlayerIndex].email, roomPlayers[secondPlayerIndex]);
+      // 2명이 모두 모였고, 2명 모두 준비 완료 상태인지 확인 (size와 every 사용)
+      const allReady = room.players.size === 2 && Array.from(room.players.values()).every(p => p.isReady);
+      if (allReady) {
+        // 게임 시작 상태로 변경 및 알림
+        room.status = 'playing';
+        room.turnCount = 1;
 
-      // 5. 현재 턴을 흑돌(선공)의 색상으로 설정
-      room.currentTurn = 'black';
+        // 1. 플레이어 목록을 배열로 가져옴
+        const roomPlayers = Array.from(room.players.values());
 
-      // 게임 시작 이벤트 발송
-      io.to(roomId).emit('game:start', { 
-        roomId,
-        turn: room.currentTurn, // 항상 'black' (흑돌 선공)
-        turnCount: room.turnCount,
-        board: room.board,
-        players: Array.from(room.players.values()) 
-      });
+        // 2. 랜덤으로 선공(흑돌) 플레이어 선택
+        const firstPlayerIndex = Math.random() < 0.5 ? 0 : 1;
+        const secondPlayerIndex = firstPlayerIndex === 0 ? 1 : 0;
 
-      if (room.turnCount === 1) {
-        // 클라이언트 화면 전환 시간을 고려해 0.5초 후 증강 선택지 발송
-        setTimeout(() => {
-          room.triggerAugmentSelection(io);
-        }, 500);
+        // 3. 선공은 'black', 후공은 'white'로 색상 재배정
+        roomPlayers[firstPlayerIndex].color = 'black';
+        roomPlayers[secondPlayerIndex].color = 'white';
+
+        // 4. Map 데이터도 갱신된 색상으로 업데이트
+        room.players.set(roomPlayers[firstPlayerIndex].email, roomPlayers[firstPlayerIndex]);
+        room.players.set(roomPlayers[secondPlayerIndex].email, roomPlayers[secondPlayerIndex]);
+
+        // 5. 현재 턴을 흑돌(선공)의 색상으로 설정
+        room.currentTurn = 'black';
+
+        // 게임 시작 상태로 갱신된 방 인스턴스를 Redis에 저장
+        await gameRoomManager.saveRoom(room);
+
+        // 게임 시작 이벤트 발송
+        io.to(roomId).emit('game:start', { 
+          roomId,
+          turn: room.currentTurn, // 항상 'black' (흑돌 선공)
+          turnCount: room.turnCount,
+          board: room.board,
+          players: Array.from(room.players.values()),
+          sealedCells: room.sealedCells,
+        });
+
+        if (room.turnCount === 1) {
+          // 클라이언트 화면 전환 시간을 고려해 0.5초 후 증강 선택지 발송
+          setTimeout(() => {
+            room.triggerAugmentSelection(io);
+          }, 500);
+        }
+      }
+    } finally {
+      if(locked) {
+        await redisSessionManager.releaseLock(lockKey);
       }
     }
   });
 
   // 방 나가기(뒤로가기) 핸들러도 확인/추가
   socket.on('room:leave', async ({ roomId }) => {
-    socket.leave(roomId);
-    gameRoomManager.leaveRoom(roomId, userEmail || socket.id);
-    // 남은 사람들에게 인원 변경 알림
-    const room = gameRoomManager.getRoom(roomId);
-    if (room) {
-      io.to(roomId).emit('room:update', { players: Array.from(room.players.values()) });
-      
-      const updatedRoom = {
-        roomId: room.roomId,
-        roomTitle: room.roomTitle,
-        playerCount: room.players.size,
-        status: room.status
-      };
-      await redisSessionManager.saveRoom(roomId, updatedRoom);
-    } else {
-      // 남은 사람이 없어 방이 삭제된 경우 Redis에서도 제거
-      await redisSessionManager.deleteRoom(roomId);
-    }
+    const lockKey = `room_update:${roomId}`;
+    const locked = await redisSessionManager.acquireLockWithRetry(lockKey, 2);
+    if (!locked) return;
+    try {
+      socket.leave(roomId);
+      await gameRoomManager.leaveRoom(roomId, userEmail || socket.id);
+      if (userEmail) {
+        await redisSessionManager.deleteUserRoom(userEmail);
+      }
+      // 남은 사람들에게 인원 변경 알림
+      const room = await gameRoomManager.getRoom(roomId);
+      if (room) {
+        const playersForLog = Array.from(room.players.values()).map((p: any) => ({ email: p.email, nickname: p.nickname, hasProfileImage: Boolean(p.profileImage) }));
+        console.debug('[room:update] players:', playersForLog);
+        io.to(roomId).emit('room:update', { players: Array.from(room.players.values()) });
 
-    // 로비에 있는 유저들에게 방 목록 갱신 전송
-    const roomsData = await redisSessionManager.getAllRooms();
-    const roomList: SCRoomSummary[] = roomsData
-      .map((roomStr: string) => JSON.parse(roomStr) as SCRoomSummary)
-      .filter((r) => r.status !== 'finished');
-    io.emit('room:list', roomList);
+        const updatedRoom = {
+          roomId: room.roomId,
+          roomTitle: room.roomTitle,
+          playerCount: room.players.size,
+          status: room.status
+        };
+        await redisSessionManager.saveRoom(roomId, updatedRoom);
+      } else {
+        // 남은 사람이 없어 방이 삭제된 경우 Redis에서도 제거
+        await gameRoomManager.deleteRoom(roomId);
+        await redisSessionManager.deleteRoom(roomId);
+      }
+
+      // 로비에 있는 유저들에게 방 목록 갱신 전송
+      const roomsData = await redisSessionManager.getAllRooms();
+      const roomList: SCRoomSummary[] = roomsData
+        .map((roomStr: string) => JSON.parse(roomStr) as SCRoomSummary)
+        .filter((r) => r.status !== 'finished');
+      io.emit('room:list', roomList);
+    } finally {
+      if(locked) {
+        await redisSessionManager.releaseLock(lockKey);
+      }
+    }
   });
 
   //방 정보 동기화 요청 
-  socket.on('room:get', ({ roomId }: { roomId: string }) => {
+  socket.on('room:get', async ({ roomId }: { roomId: string }) => {
     try {
-      const roomInstance = gameRoomManager.getRoom(roomId);
-      
+      const roomInstance = await gameRoomManager.getRoom(roomId);
+
       // 방이 존재하지 않거나 플레이어 정보가 비어있는 경우
       if (!roomInstance || roomInstance.players.size === 0) {
         socket.emit('room:not_found', { message: '존재하지 않거나 삭제된 방입니다.' });
         return;
       }
 
-      if (userEmail && userNickname) {
-        // 새로고침으로 인해 바뀐 새로운 socket.id로 유저 정보를 갱신
-        roomInstance.addPlayer(userId, userEmail, userNickname, socket.id);
+      if (userEmail) {
+        // 새로고침으로 인해 바뀐 새로운 socket.id로 유저 정보를 갱신 (최신 세션 사용)
+        try {
+          const latest = await fetchLatestSession();
+          roomInstance.addPlayer(userId, userEmail, (latest.nickname ?? userEmail ?? ''), socket.id, latest.profileImage ?? null);
+        } catch (err) {
+          roomInstance.addPlayer(userId, userEmail, (socket.user?.nickname ?? userNickname ?? userEmail ?? ''), socket.id, socket.user?.profileImage ?? null);
+        }
+
+        // 갱신된 방 인스턴스를 Redis에 저장
+        await gameRoomManager.saveRoom(roomInstance);
+
         socket.join(roomId);
 
         // 방 전체에 갱신된 플레이어 목록 브로드캐스트
-        io.to(roomId).emit('room:update', { 
-          players: Array.from(roomInstance.players.values()) 
+        io.to(roomId).emit('room:update', {
+          players: Array.from(roomInstance.players.values())
         });
-        console.log(`[Room] ${userNickname} 님의 재접속(새로고침)으로 방(${roomId}) 소켓 ID를 갱신하고 동기화했습니다.`);
+        console.log(`[Room] ${socket.user?.nickname ?? userNickname} 님의 재접속(새로고침)으로 방(${roomId}) 소켓 ID를 갱신하고 동기화했습니다.`);
       }
     } catch (err) {
       console.error('방 정보 조회 오류:', err);
@@ -414,26 +613,37 @@ io.on('connection', (socket: AuthenticatedSocket) => {
   });
 
   // 보드 상태 동기화 요청 
-  socket.on('game:sync', ({ roomId }: { roomId: string }) => {
+  socket.on('game:sync', async ({ roomId }: { roomId: string }) => {
     try {
-      const room = gameRoomManager.getRoom(roomId);
+      const room = await gameRoomManager.getRoom(roomId);
       if (!room) return;
 
-      // 새로고침이나 화면 전환 시 소켓 ID 갱신
-      if (userEmail && userNickname) {
-        room.addPlayer(userId, userEmail, userNickname, socket.id);
+      // 새로고침이나 화면 전환 시 소켓 ID 갱신 (최신 세션 사용)
+      if (userEmail) {
+        try {
+          const latest = await fetchLatestSession();
+          room.addPlayer(userId, userEmail, (latest.nickname ?? userEmail ?? ''), socket.id, latest.profileImage ?? null);
+        } catch (err) {
+          room.addPlayer(userId, userEmail, (socket.user?.nickname ?? userNickname ?? userEmail ?? ''), socket.id, socket.user?.profileImage ?? null);
+        }
+
+        // 갱신된 플레이어 및 소켓 ID 정보를 Redis에 저장
+        await gameRoomManager.saveRoom(room);
+
         socket.join(roomId);
       }
 
-      socket.emit('game:sync:response', {
-        roomId: room.roomId,
-        status: room.status,
-        turn: room.currentTurn,
-        turnCount: room.turnCount,
-        board: room.board,
-        players: Array.from(room.players.values())
-      });
-      console.log(`[GameSync] ${userNickname} 님의 게임 상태 동기화 완료 (방 ID: ${roomId})`);
+      broadcastGameUpdate(io, room, { status: room.status });
+
+      // 증강 선택 대기 중인 유저가 동기화를 요청한 경우 선택지 재전송
+      if (userEmail && room.pendingAugmentPlayers.includes(userEmail)) {
+        const options = room.pendingAugmentOptions.get(userEmail);
+        if (options) {
+          socket.emit('game:augment:select', { options });
+        }
+      }
+
+      console.log(`[GameSync] ${socket.user?.nickname ?? userNickname} 님의 게임 상태 동기화 완료 (방 ID: ${roomId})`);
     } catch (err) {
       console.error('game:sync 처리 에러:', err);
     }
@@ -441,13 +651,14 @@ io.on('connection', (socket: AuthenticatedSocket) => {
 
   // 착수 요청 이벤트 핸들러
   socket.on('game:put_stone', async ({ roomId, x, y }: { roomId: string; x: number; y: number }) => {
+    // 방 아이디를 기반으로 고유한 락 키 생성
     try {
       if (!userEmail) {
         socket.emit('game:error', { message: '인증되지 않은 사용자입니다.' });
         return;
       }
 
-      const room = gameRoomManager.getRoom(roomId);
+      const room = await gameRoomManager.getRoom(roomId);
       if (!room) {
         socket.emit('game:error', { message: '존재하지 않는 방입니다.' });
         return;
@@ -462,17 +673,17 @@ io.on('connection', (socket: AuthenticatedSocket) => {
         return;
       }
 
+      // 착수로 인해 변경된 방 상태(보드판, 턴 등)를 Redis에 즉시 저장
+      await gameRoomManager.saveRoom(room);
+
+      if (result.hiddenMoveCrushed) {
+          io.to(roomId).emit('game:system_message', { 
+            message: `💥 쨍그랑! 상대의 숨겨진 돌을 파괴했습니다! 💥` 
+          });
+      }
+
       // 착수 성공 시 방 전체 플레이어에게 게임 상태 브로드캐스트
       broadcastGameUpdate(io, room, { x, y, color: result.color });
-      // io.to(roomId).emit('game:update', {
-      //   x,
-      //   y,
-      //   color: result.color,
-      //   currentTurn: room.currentTurn,
-      //   turnCount: room.turnCount,
-      //   board: room.board,
-      //   players: Array.from(room.players.values())
-      // });
 
       // 승리 조건이 달성된 경우 게임 종료 이벤트 발송
       if (result.isWin) {
@@ -505,12 +716,17 @@ io.on('connection', (socket: AuthenticatedSocket) => {
           if (blackPlayer && whitePlayer && winner) {
             // 대국 기록 저장
             await gameRecordRepositoryImpl.saveGameRecord({
+            
               blackUserId: blackPlayer.userId,
               whiteUserId: whitePlayer.userId,
               winnerUserId: winner.userId,
               boardState: room.board,
               endReason: "WIN",
-              totalTurn: room.turnCount
+              totalTurn: room.turnCount,
+              selectedAugment: {
+                black: blackPlayer.augments.map((a) => a.id),
+                white: whitePlayer.augments.map((a) => a.id)
+              }
             });
 
             // 승자 전적 반영
@@ -547,9 +763,15 @@ io.on('connection', (socket: AuthenticatedSocket) => {
   
   // 증강 선택 수신 이벤트 핸들러 추가
   socket.on('game:augment:choose', async ({ roomId, augmentId }: { roomId: string; augmentId: string }) => {
+    const lockKey = `room_update:${roomId}`;
+    const locked = await redisSessionManager.acquireLockWithRetry(lockKey, 2);
+    if (!locked) return;
+    
     try {
-      const room = gameRoomManager.getRoom(roomId);
+      const room = await gameRoomManager.getRoom(roomId);
       if (!room || !userEmail) return;
+
+      console.log(`[Augment Choose] 요청 유저: ${userEmail}, 선택 전 대기 명단:`, room.pendingAugmentPlayers, `전체 플레이어 수: ${room.players.size}`);
 
       const player = room.players.get(userEmail);
       if (player) {
@@ -557,28 +779,32 @@ io.on('connection', (socket: AuthenticatedSocket) => {
         const augmentData = AUGMENT_MAP.get(augmentId);
         // 중복 획득 방지 후 전체 객체 상태로 추가
         if (augmentData && !player.augments.some((a) => a.id === augmentId)) {
-          player.augments.push(augmentData);
+          player.augments.push({ // 얕은 복사 실시 
+            ...augmentData,
+            isUsed: false // 초기 사용 여부 설정
+          });
         }
 
         // 대기 명단에서 제외
-        room.pendingAugmentPlayers.delete(userEmail);
+        room.pendingAugmentPlayers = room.pendingAugmentPlayers.filter(email => email !== userEmail);
         console.log(`[Augment] ${player.nickname} 증강 획득: ${augmentId}`);
       }
 
+      // 증강 획득 및 대기 명단 변경 상태를 Redis에 저장
+      await gameRoomManager.saveRoom(room);
+
       // 방의 모든 플레이어가 선택을 마쳤는지 확인
-      if (room.pendingAugmentPlayers.size === 0) {
+      if (room.pendingAugmentPlayers.length === 0 && room.players.size > 0) {
         // 선택 완료된 상태를 방 전체에 동기화
-        broadcastGameUpdate(io, room)
-        // io.to(roomId).emit('game:update', {
-        //   currentTurn: room.currentTurn,
-        //   turnCount: room.turnCount,
-        //   board: room.board,
-        //   players: Array.from(room.players.values())
-        // });
-        console.log(`[Augment] 방(${roomId}) 모든 인원 증강 선택 완료. 게임 진행 동기화.`);
+        broadcastGameUpdate(io, room);
+        console.log(`[Augment] 방(${roomId}) 모든 인원(${room.players.size}명) 증강 선택 완료. 게임 진행 동기화.`);
       }
     } catch (err) {
       console.error('증강 선택 처리 중 오류:', err);
+    } finally {
+      if(locked) {
+        await redisSessionManager.releaseLock(lockKey);
+      }
     }
   });
 
@@ -589,7 +815,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
         return;
       }
 
-      const room = gameRoomManager.getRoom(roomId);
+      const room = await gameRoomManager.getRoom(roomId);
       if (!room || room.status !== 'playing') {
         socket.emit('game:error', { message: '진행 중인 게임이 아닙니다.' });
         return;
@@ -647,6 +873,15 @@ io.on('connection', (socket: AuthenticatedSocket) => {
           return;
         }
         // 봉인 상태를 보드나 방 정보에 기록
+        const alreadySealed = room.sealedCells.some((cell: any) => cell.x === target.x && cell.y === target.y);
+        if (alreadySealed) {
+          socket.emit('game:error', { message: '이미 봉인된 칸입니다.' });
+          return;
+        }
+      
+        // 2턴 동안 유지되도록 배열에 밀어넣기
+        room.sealedCells.push({ x: target.x, y: target.y, turnsRemaining: 2 });
+        console.log(`[Seal Empty] ${player.nickname} 님이 (${target.x}, ${target.y}) 칸을 2턴간 봉인했습니다.`);
       }
       else if (augmentId === 'coin_flip' ) {
         // 자신의 돌 하나를 랜덤한 위치로 이동시킵니다.
@@ -747,6 +982,11 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       }
       else if (augmentId === 'hidden_move') {
         // 이번 턴에 둔 돌이 1턴 동안 상대에게 안 보입니다.
+        player.activeEffects.push({
+            id: 'hidden_move_pending',
+            turnsRemaining: 3
+        });
+        console.log(`[Hidden Move] ${player.nickname} 님이 숨겨진 한 수 대기 상태가 되었습니다.`);
       }
       else if (augmentId === 'fog_of_war') {
         // 3턴 동안 상대가 자신의 돌과 인접한 칸만 보이도록 합니다.
@@ -799,7 +1039,6 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       }
       else if (augmentId === 'meteor' && target) {
         // 3x3 칸 내의 모든 바둑알을 무작위 위치로 이동시킵니다
-        // 3x3 칸 내의 모든 바둑알을 바둑판 전체의 무작위 위치로 이동시킵니다.
         const minX = Math.max(0, target.x - 1);
         const maxX = Math.min(14, target.x + 1);
         const minY = Math.max(0, target.y - 1);
@@ -848,20 +1087,226 @@ io.on('connection', (socket: AuthenticatedSocket) => {
 
         console.log(`[Meteor] ${player.nickname} 님이 (${target.x}, ${target.y}) 중심 3x3 영역의 돌 ${collectedStones.length}개를 무작위 위치로 날려버렸습니다.`);
       }
-      else if (augmentId === 'different_game' && target) {
+      else if (augmentId === 'different_game') {
         // 자신의 돌로 둘러진 영역에 있는 상대 돌을 제거합니다.
+        const myColor = player.color; 
+        const oppColor = myColor === 'black' ? 'white' : 'black';
+
+        // 방문 여부를 체크할 2차원 배열 초기화
+        const visited = Array.from({ length: 15 }, () => Array(15).fill(false));
+        const deadStones = [];
+      
+        // 상하좌우 방향 배열
+        const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+      
+        // 전체 보드를 순회하며 상대방 돌 그룹의 숨구멍을 검사
+        for (let y = 0; y < 15; y++) {
+          for (let x = 0; x < 15; x++) {
+            if (room.board[y][x] === oppColor && !visited[y][x]) {
+              const group = [];
+              const queue = [{ cx: x, cy: y }];
+              visited[y][x] = true;
+              let hasLiberty = false;
+            
+              // BFS 탐색을 통해 상하좌우로 연결된 상대방 돌을 하나의 그룹으로 묶음
+              let head = 0;
+              while (head < queue.length) {
+                const { cx, cy } = queue[head++];
+                group.push({ x: cx, y: cy });
+              
+                for (const [dx, dy] of directions) {
+                  const nx = cx + dx;
+                  const ny = cy + dy;
+                
+                  // 보드판 범위 이내인지 확인
+                  if (nx >= 0 && nx < 15 && ny >= 0 && ny < 15) {
+                    const cell = room.board[ny][nx];
+
+                    if (!cell || cell === '') {
+                      // 빈칸이 하나라도 발견되면 이 그룹은 숨구멍이 있는 것으로 판정
+                      hasLiberty = true;
+                    } else if (cell === oppColor && !visited[ny][nx]) {
+                      visited[ny][nx] = true;
+                      queue.push({ cx: nx, cy: ny });
+                    }
+                  }
+                }
+              }
+            
+              // 탐색 종료 후 숨구멍이 단 하나도 없다면 사방이 막힌 그룹이므로 제거 배열에 추가
+              if (!hasLiberty) {
+                deadStones.push(...group);
+              }
+            }
+          }
+        }
+
+        // 둘러싸인 상대방 돌들을 보드에서 일괄 제거
+        let removedCount = 0;
+        deadStones.forEach(stone => {
+          room.board[stone.y][stone.x] = '';
+          removedCount++;
+        });
       }
       else if (augmentId === 'peek') {
         // 상대의 증강 1개를 확인합니다.
+        const opponent = Array.from(room.players.values()).find(p => p.email !== userEmail);
+        
+        if (!opponent) {
+          socket.emit('game:error', { message: '상대방 정보를 찾을 수 없습니다.' });
+          return;
+        }
+
+        // 상대방의 증강 중 아직 사용하지 않은(isUsed가 false인) 증강들 필터링
+        const unusedAugments = opponent.augments.filter(a => !a.isUsed);
+
+        if (unusedAugments.length === 0) {
+          socket.emit('game:error', { message: '상대방이 보유한 사용 가능한 증강이 없습니다.' });
+          return;
+        }
+
+        // 남은 증강 중 무작위로 하나 선택
+        const randomIndex = Math.floor(Math.random() * unusedAugments.length);
+        const targetAugment = unusedAugments[randomIndex];
+
+        // 얕은 복사를 통해 내 증강 배열에 추가하되, 사용할 수는 없도록 isUsed를 true로 설정
+        const myPeekIndex = player.augments.findIndex(a => a.id === augmentId && !a.isUsed);
+        if (myPeekIndex !== -1) {
+          player.augments[myPeekIndex] = {
+            ...targetAugment,
+            isUsed: true // 사용 불가 상태로 표시만 함
+          };
+        }
+
+        console.log(`[Peek] ${player.nickname} 님이 ${opponent.nickname} 님의 증강(${targetAugment.name})을 훔쳐봤습니다.`);
+
+        if (opponent && opponent.socketId) {
+          io.to(opponent.socketId).emit('game:augment:notified', {
+            nickname: player.nickname,
+            augmentName: augmentData.name,
+            description: augmentData.description
+          });
+        }
+
+        // 증강 사용으로 변경된 보드 및 플레이어 상태를 Redis에 저장
+        await gameRoomManager.saveRoom(room);
+
+        broadcastGameUpdate(io, room);
+        return;
       }
       else if (augmentId === 'confiscate') {
         // 상대의 증강 1개를 사용 상태로 만듭니다.
+        const opponent = Array.from(room.players.values()).find(p => p.email !== userEmail);
+        
+        if (!opponent) {
+          socket.emit('game:error', { message: '상대방 정보를 찾을 수 없습니다.' });
+          return;
+        }
+
+        // 상대방의 증강 중 아직 사용하지 않은 증강들 필터링
+        const unusedAugments = opponent.augments.filter(a => !a.isUsed);
+
+        if (unusedAugments.length === 0) {
+          socket.emit('game:error', { message: '상대방이 보유한 사용 가능한 증강이 없습니다.' });
+          return;
+        }
+
+        // 무작위로 증강 하나 선택
+        const randomIndex = Math.floor(Math.random() * unusedAugments.length);
+        const targetAugment = unusedAugments[randomIndex];
+
+        // 선택된 상대방의 증강을 강제로 사용 완료(isUsed = true) 처리
+        targetAugment.isUsed = true;
+
+        console.log(`[Confiscate] ${player.nickname} 님이 ${opponent.nickname} 님의 증강(${targetAugment.name})을 압수(사용 불가 처리)했습니다.`);
       }
       else if (augmentId === 'steal') {
         // 상대 증강 1개를 대신 사용합니다.
+        const opponent = Array.from(room.players.values()).find(p => p.email !== userEmail);
+        
+        if (!opponent) {
+          socket.emit('game:error', { message: '상대방 정보를 찾을 수 없습니다.' });
+          return;
+        }
+
+        // 상대방의 증강 중 아직 사용하지 않은 증강들 필터링
+        const unusedAugments = opponent.augments.filter(a => !a.isUsed);
+
+        if (unusedAugments.length === 0) {
+          socket.emit('game:error', { message: '상대방이 보유한 사용 가능한 증강이 없습니다.' });
+          return;
+        }
+
+        // 무작위로 증강 하나 선택
+        const randomIndex = Math.floor(Math.random() * unusedAugments.length);
+        const targetAugment = unusedAugments[randomIndex];
+
+        // 1. 상대방의 원본 증강은 사용 불가 상태(압수)로 변경
+        targetAugment.isUsed = true;
+
+        // 2. 훔친 증강을 내 인벤토리에 적용
+        const myStealIndex = player.augments.findIndex(a => a.id === augmentId && !a.isUsed);
+        if (myStealIndex !== -1) {
+          player.augments[myStealIndex] = {
+            ...targetAugment,
+            isUsed: false
+          };
+        }
+
+        console.log(`[Steal] ${player.nickname} 님이 ${opponent.nickname} 님의 증강(${targetAugment.name})을 훔쳤습니다.`);
+
+        if (opponent && opponent.socketId) {
+          io.to(opponent.socketId).emit('game:augment:notified', {
+            nickname: player.nickname,
+            augmentName: augmentData.name,
+            description: augmentData.description
+          });
+        }
+
+        // 증강 사용으로 변경된 보드 및 플레이어 상태를 Redis에 저장
+        await gameRoomManager.saveRoom(room);
+
+        broadcastGameUpdate(io, room);
+        return;
       }
       else if (augmentId === 'bombardment') {
         // 랜덤한 위치에 랜덤한 돌 5개를 둡니다.
+        const emptySpots: { x: number, y: number }[] = [];
+      
+        // 1. 보드 전체를 순회하며 빈칸 좌표 수집
+        for (let y = 0; y < 15; y++) {
+          for (let x = 0; x < 15; x++) {
+            if (room.board[y][x] === '') {
+              emptySpots.push({ x, y });
+            }
+          }
+        }
+
+        // 2. 빈칸이 5개 미만일 경우를 대비해 배치할 돌의 개수 확정
+        const stonesToPlace = Math.min(5, emptySpots.length);
+        if (stonesToPlace === 0) {
+          socket.emit('game:error', { message: '보드에 빈칸이 없어 폭격을 사용할 수 없습니다.' });
+          return;
+        }
+
+        // 3. 빈칸 배열을 무작위로 섞음 (Fisher-Yates 셔플 알고리즘)
+        for (let i = emptySpots.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          const temp = emptySpots[i];
+          emptySpots[i] = emptySpots[j];
+          emptySpots[j] = temp;
+        }
+
+        // 4. 무작위로 섞인 배열에서 앞에서부터 5개 선택
+        const selectedSpots = emptySpots.slice(0, stonesToPlace);
+        const colors: ('black' | 'white')[] = ['black', 'white'];
+
+        // 5. 선택된 위치에 랜덤한 색상의 돌 배치
+        selectedSpots.forEach(spot => {
+          const randomColor = colors[Math.floor(Math.random() * colors.length)];
+          room.board[spot.y][spot.x] = randomColor;
+          console.log(`[Augment - Bombardment] (${spot.x}, ${spot.y}) 위치에 ${randomColor} 돌 배치`);
+        });
       }
       else if (augmentId === 'table_flip') {
         // 모든 돌 위치를 랜덤한 위치로 이동시킵니다.
@@ -902,41 +1347,84 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       }
       else if (augmentId === 'undo') {
         // 이전 내 턴으로 돌아갑니다. (이전 턴 상대 돌과 내 돌 제거)
+        const lastBlack = room.lastMoves.black;
+        const lastWhite = room.lastMoves.white;
+
+        // 1. 초반이라 아직 두 플레이어 모두 1번 이상 착수하지 않은 경우 방어
+        if (!lastBlack || !lastWhite) {
+          socket.emit('game:error', { message: '양측 모두 한 번씩 착수해야 무르기를 사용할 수 있습니다.' });
+          return;
+        }
+
+        // 2. 보드 상태 확인 (중간에 증강으로 인해 돌이 변경되거나 파괴되었는지 검사)
+        if (room.board[lastBlack.y][lastBlack.x] !== 'black' || 
+            room.board[lastWhite.y][lastWhite.x] !== 'white') {
+          socket.emit('game:error', { message: '최근 착수된 돌이 파괴되거나 색이 변하여 무르기를 사용할 수 없습니다.' });
+          return;
+        }
+
+        // 3. 두 돌 모두 보드에서 삭제
+        room.board[lastBlack.y][lastBlack.x] = '';
+        room.board[lastWhite.y][lastWhite.x] = '';
+        
+        // 4. 한 번 무르기가 적용된 돌을 다시 무를 수 없도록 최근 착수 기록 초기화
+        room.lastMoves.black = null;
+        room.lastMoves.white = null;
+
+        console.log(`[Undo] ${player.nickname} 님이 무르기를 사용했습니다. 흑(${lastBlack.x}, ${lastBlack.y}), 백(${lastWhite.x}, ${lastWhite.y}) 돌이 제거되었습니다.`);
       }
 
       // 사용 완료된 증강은 소모 처리 필요. 
-      const targetAugment = player.augments.find((a) => a.id === augmentId);
+      const targetAugment = player.augments.find((a) => a.id === augmentId && !a.isUsed);
       if (targetAugment) {
         targetAugment.isUsed = true;
+      } else {
+        socket.emit('game:error', { message: '이미 사용했거나 보유하지 않은 증강입니다.' });
+        return;
       }
+
+      const opponent = Array.from(room.players.values()).find(p => p.email !== userEmail);
+          
+      if (opponent && opponent.socketId) {
+        io.to(opponent.socketId).emit('game:augment:notified', {
+          nickname: player.nickname,
+          augmentName: augmentData.name,
+          description: augmentData.description
+        });
+      }
+
+      // 증강 사용으로 변경된 보드 및 플레이어 상태를 Redis에 저장
+      await gameRoomManager.saveRoom(room);
 
       // 갱신된 보드와 플레이어 상태를 방 전체에 동기화
       broadcastGameUpdate(io, room)
-      // io.to(roomId).emit('game:update', {
-      //   currentTurn: room.currentTurn,
-      //   turnCount: room.turnCount,
-      //   board: room.board,
-      //   players: Array.from(room.players.values())
-      // });
 
     } catch (err) {
       console.error('증강 사용 처리 중 오류:', err);
       socket.emit('game:error', { message: '증강 사용 처리 중 서버 오류가 발생했습니다.' });
-    }
+    } 
   });
 
   //항복 요청 처리 
   socket.on('game:surrender', async ({ roomId }) => {
+    const lockKey = `room_update:${roomId}`;
+
     try {
       if (!userEmail) return;
 
-      const room = gameRoomManager.getRoom(roomId);
+      const locked = await redisSessionManager.acquireLockWithRetry(lockKey, 2);
+      if (!locked) return;
+
+      const room = await gameRoomManager.getRoom(roomId);
       if (!room || room.status !== 'playing') return;
 
       room.status = 'finished';
 
       const loser = room.players.get(userEmail);
       const winner = Array.from(room.players.values()).find(p => p.email !== userEmail);
+
+      // 변경된 room 인스턴스의 상태를 Redis에 영속화
+      await gameRoomManager.saveRoom(room);
 
       // Redis 방 상태를 'finished'로 갱신
       const updatedRoom = {
@@ -966,7 +1454,11 @@ io.on('connection', (socket: AuthenticatedSocket) => {
             winnerUserId: winner.userId,
             boardState: room.board,
             endReason: "SURRENDER",
-            totalTurn: room.turnCount
+            totalTurn: room.turnCount,
+            selectedAugment: {
+              black: blackPlayer.augments.map((a) => a.id),
+              white: whitePlayer.augments.map((a) => a.id)
+            }
           });
 
           await userStateRepositoryImpl.applyGameResult(winner.userId, 'win', 10);
@@ -989,9 +1481,10 @@ io.on('connection', (socket: AuthenticatedSocket) => {
 
     } catch (err) {
       console.error('항복 처리 중 오류:', err);
-    }
+    }finally {
+      await redisSessionManager.releaseLock(lockKey);
+    } 
   });
-
 });
 
 // 데이터베이스 초기화 및 서버 구동을 위한 비동기 래퍼 함수
@@ -1000,6 +1493,140 @@ async function startServer() {
     // 서버가 켜지기 직전에 DB 커넥션 풀을 만들고 schema.sql을 실행
     await initializeDatabase();
     console.log('[Server] 데이터베이스 초기화 및 스키마 동기화 완료.');
+
+    // 서버 구동 시 Redis에 남아있는 유령 방(플레이어 0명 등) 청소 작업
+    try {
+      const allRoomsData = await redisSessionManager.getAllRooms();
+      for (const roomStr of allRoomsData) {
+        const summary = JSON.parse(roomStr);
+        const roomInstance = await gameRoomManager.getRoom(summary.roomId);
+        
+        // 방 인스턴스가 아예 없거나, 플레이어가 한 명도 없는 경우 깔끔하게 삭제
+        if (!roomInstance || roomInstance.players.size === 0) {
+          await gameRoomManager.deleteRoom(summary.roomId);
+          await redisSessionManager.deleteRoom(summary.roomId);
+          console.log(`[Ghost Room Clean] 유령 방 정리 완료: ${summary.roomId}`);
+        }
+      }
+    } catch (cleanErr) {
+      console.warn('[Ghost Room Clean] 정리 중 예외 발생:', cleanErr);
+    }
+
+    // Redis Pub/Sub 클라이언트 설정 (멀티 Pod 환경 Socket.io 동기화)
+    const redisUrl = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
+    const pubClient = createClient({ url: redisUrl });
+    const subClient = pubClient.duplicate();
+
+    pubClient.on('error', (err) => console.error('[Redis PubClient Error]', err));
+    subClient.on('error', (err) => console.error('[Redis SubClient Error]', err));
+
+    // 만료 이벤트를 안정적으로 받기 위한 전용 구독 클라이언트 생성
+    const eventSubscriber = pubClient.duplicate();
+
+    await Promise.all([
+      pubClient.connect(),
+      subClient.connect(),
+      eventSubscriber.connect()
+    ]);
+
+    // Redis 서버 설정: 키 만료 이벤트를 발생시키도록 설정 (AWS ElastiCache 등 외부 인프라 사용 시 파라미터 그룹에서 직접 설정해야 할 수 있음)
+    if (process.env.NODE_ENV !== 'production') {
+      try {
+        await pubClient.configSet('notify-keyspace-events', 'Ex');
+        console.log('[Redis] 개발 환경: 키 만료 이벤트(Ex) 설정 완료');
+      } catch (err) {
+        console.warn('[Redis] configSet 설정 실패:', err);
+      }
+    }
+
+    io.adapter(createAdapter(pubClient, subClient));
+
+    // 만료 이벤트 구독 및 분산 환경 중복 처리 방지 로직
+    await eventSubscriber.subscribe('__keyevent@0__:expired', async (key) => {
+      if (key.startsWith('disconnect_timer:')) {
+        const email = key.split(':')[1];
+        
+        const lockKey = `forfeit:${email}`;
+        const locked = await redisSessionManager.acquireLockWithRetry(lockKey, 10);
+        if (!locked) return; 
+      
+        console.log(`[Timer Expired] ${email} 님의 5초 유예 만료, 몰수패 및 세션 정리 시작`);
+        
+        try {
+          // O(1) 탐색으로 유저가 게임 방에 속해 있었는지 즉시 확인
+          const roomId = await redisSessionManager.getUserRoom(email);
+          
+          // 로비가 아닌 실제 방에 있었다면 몰수패 및 퇴장 로직 실행
+          if (roomId && roomId !== 'lobby') {
+            const room = await gameRoomManager.getRoom(roomId);
+            if (room) {
+              const player = Array.from(room.players.values()).find(p => p.email === email);
+            
+              if (player) {
+                console.log(`[Room] 5초 경과로 인한 방(${room.roomId}) 자동 퇴장 처리: ${player.nickname}`)
+              
+                if (room.status === 'playing') {
+                  room.status = 'finished';
+                  const winner = Array.from(room.players.values()).find(p => p.email !== email);
+                
+                  if (winner) {
+                    io.to(room.roomId).emit('game:system_message', { message: `상대방의 연결이 끊어졌습니다.` });
+                    io.to(room.roomId).emit('game:over', {
+                      winner: winner.color,
+                      winnerNickname: winner.nickname,
+                      message: `${player.nickname} 님의 연결 종료(도망)로 승리했습니다!`
+                    });
+                  
+                    try {
+                      await userStateRepositoryImpl.applyGameResult(winner.userId, 'win', 10);
+                      await userStateRepositoryImpl.applyGameResult(player.userId, 'lose', -10);
+                    } catch (err) {
+                      console.error('몰수패 전적 반영 에러:', err);
+                    }
+                  }
+                }
+              
+                await gameRoomManager.leaveRoom(room.roomId, player.socketId);
+              
+                const remainingRoom = await gameRoomManager.getRoom(room.roomId);
+                if (remainingRoom && remainingRoom.players.size > 0) {
+                  io.to(room.roomId).emit('room:update', { players: Array.from(remainingRoom.players.values()) });
+                  const updatedRoom = {
+                    roomId: remainingRoom.roomId,
+                    roomTitle: remainingRoom.roomTitle,
+                    playerCount: remainingRoom.players.size,
+                    status: remainingRoom.status
+                  };
+                  await redisSessionManager.saveRoom(room.roomId, updatedRoom);
+                } else {
+                  await redisSessionManager.deleteRoom(room.roomId);
+                }
+              
+                const updatedRoomsData = await redisSessionManager.getAllRooms();
+                const roomList = updatedRoomsData
+                  .map((rStr: string) => JSON.parse(rStr) as SCRoomSummary)
+                  .filter((r) => r.status !== 'finished');
+                io.emit('room:list', roomList);
+              }
+            }
+          }
+        
+          // 방 참여 여부와 관계없이 세션 및 모든 매핑 데이터 파기
+          const sessionId = await redisSessionManager.getActiveSessionByEmail(email);
+          if (sessionId) {
+            await redisSessionManager.destroySession(sessionId);
+          }
+          await redisSessionManager.clearAllUserMappings(email);
+          
+          console.log(`[세션 정리 완료] 탭 종료 5초 경과로 세션 완전 파기: ${email}`);
+        
+        } catch (error) {
+          console.error(`[세션 정리 오류]:`, error);
+        } finally {
+          await redisSessionManager.releaseLock(lockKey);
+        }
+      }
+    });
 
     const PORT = 8080;
     httpServer.listen(PORT, () => {

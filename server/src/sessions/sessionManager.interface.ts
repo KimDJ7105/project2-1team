@@ -15,9 +15,33 @@ export interface ISessionManager {
   // 세션 연장 (실시간 활동 시 만료 시간 갱신)
   touchSession(sessionId: string, ttlSeconds: number): Promise<void>;
 
-  // [추가] 방 목록 조회용 (Redis Hash 전체 가져오기)
+  // 세션 일부 필드만 갱신하되 기존 TTL은 유지
+  updateSession(sessionId: string, updates: Record<string, any>): Promise<void>;
+
+  // 방 목록 조회용 (Redis Hash 전체 가져오기)
   getAllRooms(): Promise<string[]>;
 
-  // [추가] 방 생성/저장용
+  // 방 생성/저장용
   saveRoom(roomId: string, roomData: Record<string, any>): Promise<void>;
+
+  // 중복 로그인 방지용 소켓 처리 
+  getActiveSocket(email: string): Promise<string | null>;
+  setActiveSocket(email: string, socketId: string): Promise<void>;
+  deleteActiveSocket(email: string, socketId: string): Promise<void>;
+
+  // 타이머 및 분산 락 관련 메서드 추가
+  setDisconnectTimer(email: string, roomId: string): Promise<void>;
+  clearDisconnectTimer(email: string): Promise<void>;
+  acquireLock(key: string, ttlSeconds: number): Promise<boolean>;
+
+  // pod 간에 락 기능 구현용 
+  releaseLock(key: string): Promise<void>;
+  acquireLockWithRetry(key: string, ttlSeconds: number, retryCount?: number, delayMs?: number): Promise<boolean>;
+
+  // O(1)로 검사하기 위한 메서드 
+  setUserRoom(email: string, roomId: string): Promise<void>;
+  getUserRoom(email: string): Promise<string | null>;
+  deleteUserRoom(email: string): Promise<void>;
+
+  clearAllUserMappings(email: string): Promise<void>
 }

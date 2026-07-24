@@ -1,11 +1,13 @@
 // server/src/rooms/GameRoom.ts
 
 import { AUGMENT_LIST, IAugment } from '../shared/data/augments';
+import { redisSessionManager } from '../sessions/redisSessionManager';
 
 export interface Player {
   userId: number;
   email: string;
   nickname: string;
+  profileImage?: string | null;
   socketId: string;
   color: 'black' | 'white';
   isReady: boolean;
@@ -22,20 +24,44 @@ export class GameRoom {
   public status: 'waiting' | 'playing' | 'finished' = 'waiting';
   public turnCount: number = 1;
   // 증강 선택을 대기 중인 플레이어 이메일 목록
-  public pendingAugmentPlayers: Set<string> = new Set();
+  public pendingAugmentPlayers: string[] = [];
+  public pendingAugmentOptions: Map<string, any[]> = new Map();
+  public sealedCells: { x: number; y: number; turnsRemaining: number }[] = [];
+  public hiddenStones: { x: number; y: number; email: string; turnsRemaining: number }[] = [];
+  public lastMoves: { black: { x: number; y: number } | null; white: { x: number; y: number } | null } = { black: null, white: null };
 
-  constructor(roomId: string, roomTitle: string) {
+  constructor(roomId: string, roomTitle: string, data?: any) {
     this.roomId = roomId;
     this.roomTitle = roomTitle;
-    this.board = Array(15).fill(null).map(() => Array(15).fill(''));
+
+    if (data) {
+      this.board = data.board || Array(15).fill(null).map(() => Array(15).fill(''));
+      this.players = new Map(Object.entries(data.players || {}));
+      this.currentTurn = data.currentTurn || 'black';
+      this.status = data.status || 'waiting';
+      this.turnCount = data.turnCount || 1;
+      this.pendingAugmentPlayers = data.pendingAugmentPlayers || [];
+      this.pendingAugmentOptions = new Map(Object.entries(data.pendingAugmentOptions || {}));
+      this.sealedCells = data.sealedCells || [];
+      this.hiddenStones = data.hiddenStones || [];
+      this.lastMoves = data.lastMoves || { black: null, white: null };
+    } else {
+      this.board = Array(15).fill(null).map(() => Array(15).fill(''));
+    }
   }
 
   // 플레이어 참가
-  public addPlayer(userId: number, email: string, nickname: string, socketId: string): boolean {
+  public addPlayer(userId: number, email: string, nickname: string, socketId: string, profileImage?: string | null): boolean {
     if (this.players.has(email)) {
-      // 이미 참가 중인 경우 소켓 ID만 갱신
+      // 이미 참가 중인 경우 소켓 ID와 변경된 필드만 갱신 (null/undefined로 기존값 덮어쓰기 금지)
       const player = this.players.get(email)!;
       player.socketId = socketId;
+      if (nickname && nickname !== player.nickname) {
+        player.nickname = nickname;
+      }
+      if (profileImage) {
+        player.profileImage = profileImage;
+      }
       return true;
     }
 
@@ -51,6 +77,7 @@ export class GameRoom {
       userId,
       email,
       nickname,
+      profileImage: profileImage ?? null,
       socketId,
       color,
       isReady: false,
@@ -72,10 +99,13 @@ export class GameRoom {
     this.currentTurn = 'black';
     this.status = 'waiting';
     this.turnCount = 1;
+    this.sealedCells = [];
+    this.hiddenStones = [];
+    this.lastMoves = { black: null, white: null };
   }
 
   // 착수 검증 및 처리 메서드
-  public putStone(email: string, x: number, y: number): { success: boolean; message?: string; isWin?: boolean; color?: 'black' | 'white' } {
+  public putStone(email: string, x: number, y: number): { success: boolean; message?: string; isWin?: boolean; color?: 'black' | 'white'; hiddenMoveCrushed?: boolean } {
     if (this.status !== 'playing') {
       return { success: false, message: '진행 중인 게임이 아닙니다.' };
     }
@@ -93,18 +123,44 @@ export class GameRoom {
       return { success: false, message: '바둑판 영역을 벗어난 좌표입니다.' };
     }
 
-    if (this.board[y][x] !== '') {
+    let hiddenMoveCrushed = false;
+    const hiddenTargetIndex = this.hiddenStones.findIndex(stone => stone.x === x && stone.y === y && stone.email !== email);
+    
+    // 원래 돌이 있으면서, 그 돌이 상대의 숨겨진 돌이 아닌 경우에만 착수 거부
+    if (this.board[y][x] !== '' && hiddenTargetIndex === -1) {
       return { success: false, message: '이미 돌이 놓여 있는 자리입니다.' };
+    }
+
+    // 상대의 숨겨진 돌 자리를 클릭했다면, 숨겨진 돌 배열에서 제거하고 덮어씌움
+    if (hiddenTargetIndex !== -1) {
+      this.hiddenStones.splice(hiddenTargetIndex, 1);
+      hiddenMoveCrushed = true;
+    }
+
+    const isSealed = this.sealedCells.some(cell => cell.x === x && cell.y === y);
+    if (isSealed) {
+      return { success: false, message: '봉인된 칸에는 돌을 둘 수 없습니다.' };
     }
 
     // 바둑판에 돌 배치
     this.board[y][x] = this.currentTurn;
+    
+    // 방금 착수한 돌의 좌표를 기록
+    this.lastMoves[this.currentTurn] = { x, y };
+
+    const pendingEffectIndex = player.activeEffects.findIndex(e => e.id === 'hidden_move_pending');
+    if (pendingEffectIndex !== -1) {
+        // 상대 턴 1번 진행 후 내 턴이 돌아오기 직전에 풀리도록 turnsRemaining을 2로 설정
+        this.hiddenStones.push({ x, y, email, turnsRemaining: 2 }); 
+        // 효과 제거 (1회성)
+        player.activeEffects.splice(pendingEffectIndex, 1);
+    }
 
     // 승리 조건 검사
     const isWin = this.checkWin(x, y, this.currentTurn);
     if (isWin) {
       this.status = 'finished';
-      return { success: true, isWin: true, color: this.currentTurn };
+      return { success: true, isWin: true, color: this.currentTurn, hiddenMoveCrushed : hiddenMoveCrushed };
     }
 
     // 다음 턴으로 교체 및 턴 수 증가
@@ -112,8 +168,22 @@ export class GameRoom {
     this.turnCount += 1;
 
     this.tickEffects(player.email);
+    this.tickSealedCells();
+    this.tickHiddenStones();
 
-    return { success: true, isWin: false, color: player.color };
+    return { success: true, isWin: false, color: player.color, hiddenMoveCrushed : hiddenMoveCrushed };
+  }
+
+  public tickHiddenStones(): void {
+    this.hiddenStones = this.hiddenStones
+      .map(stone => ({ ...stone, turnsRemaining: stone.turnsRemaining - 1 }))
+      .filter(stone => stone.turnsRemaining > 0);
+  }
+
+  public tickSealedCells(): void {
+    this.sealedCells = this.sealedCells
+      .map(cell => ({ ...cell, turnsRemaining: cell.turnsRemaining - 1 }))
+      .filter(cell => cell.turnsRemaining > 0);
   }
 
   // 4방향 5목 판정 알고리즘
@@ -156,10 +226,11 @@ export class GameRoom {
   }
 
   public triggerAugmentSelection(io: any): void {
-    this.pendingAugmentPlayers.clear();
+    this.pendingAugmentPlayers = [];
+    this.pendingAugmentOptions.clear();
 
     for (const player of this.players.values()) {
-      this.pendingAugmentPlayers.add(player.email);
+      this.pendingAugmentPlayers.push(player.email);
 
       // 본인이 이미 가진 증강은 객체의 id를 기준으로 비교하여 제외
       const availableAugments = AUGMENT_LIST.filter(
@@ -170,11 +241,20 @@ export class GameRoom {
       const shuffled = [...availableAugments].sort(() => Math.random() - 0.5);
       const selectedOptions = shuffled.slice(0, 3);
 
+      // 생성된 옵션을 메모리에 저장
+      this.pendingAugmentOptions.set(player.email, selectedOptions);
+
       // 개별 소켓으로 증강 선택지 3개 발송
       io.to(player.socketId).emit('game:augment:select', {
         options: selectedOptions,
       });
     }
+
+    console.log(`[Augment Trigger] 방 ID: ${this.roomId}, 현재 등록된 플레이어 수: ${this.players.size}명, 대기 명단:`, this.pendingAugmentPlayers);
+
+    gameRoomManager.saveRoom(this).catch(err => {
+      console.error('증강 트리거 상태 Redis 저장 오류:', err);
+    });
   }
 
   // 턴이 종료될 때 해당 플레이어의 지속 효과 턴 수를 차감, 만료된 효과를 제거
@@ -189,40 +269,53 @@ export class GameRoom {
       }))
       .filter((effect) => effect.turnsRemaining > 0);
   }
+
+  // Redis 저장을 위해 순수 JSON 객체로 변환
+  public toJSON() {
+    return {
+      roomId: this.roomId,
+      roomTitle: this.roomTitle,
+      players: Object.fromEntries(this.players),
+      board: this.board,
+      currentTurn: this.currentTurn,
+      status: this.status,
+      turnCount: this.turnCount,
+      pendingAugmentPlayers: Array.from(this.pendingAugmentPlayers),
+      pendingAugmentOptions: Object.fromEntries(this.pendingAugmentOptions),
+      sealedCells: this.sealedCells,
+      hiddenStones: this.hiddenStones,
+      lastMoves: this.lastMoves,
+    };
+  }
 }
 
 
 class GameRoomManager {
-  private rooms: Map<string, GameRoom> = new Map();
+  public async getRoom(roomId: string): Promise<GameRoom | undefined> {
+    const rawData = await redisSessionManager.getRoomState(roomId); // Redis 전용 조회 메서드 활용 필요 혹은 아래 구현 참조
+    if (!rawData) return undefined;
+    return new GameRoom(rawData.roomId, rawData.roomTitle, rawData);
+  }
 
-  // 메모리에 룸 인스턴스 생성
-  public createRoom(roomId: string, roomTitle: string): GameRoom {
+  public async saveRoom(room: GameRoom): Promise<void> {
+    await redisSessionManager.saveRoomState(room.roomId, room.toJSON());
+  }
+
+  public async createRoom(roomId: string, roomTitle: string): Promise<GameRoom> {
     const room = new GameRoom(roomId, roomTitle);
-    this.rooms.set(roomId, room);
+    await this.saveRoom(room);
     return room;
   }
 
-  // 특정 룸 인스턴스 가져오기
-  public getRoom(roomId: string): GameRoom | undefined {
-    return this.rooms.get(roomId);
-  }
-
-  // 전체 룸 인스턴스 목록 가져오기
-  public getAllRooms(): GameRoom[] {
-    return Array.from(this.rooms.values());
-  }
-
-  // 룸 인스턴스 삭제
-  public deleteRoom(roomId: string): void {
+  public async deleteRoom(roomId: string): Promise<void> {
     console.log("방 삭제, ID : ", roomId);
-    this.rooms.delete(roomId);
+    await redisSessionManager.deleteRoomState(roomId);
   }
 
-  public leaveRoom(roomId: string, identifier: string): void {
-    const room = this.getRoom(roomId);
+  public async leaveRoom(roomId: string, identifier: string): Promise<void> {
+    const room = await this.getRoom(roomId);
     if (!room) return;
     
-    // socketId뿐만 아니라 맵의 key인 userEmail로도 대조하여 확실하게 플레이어 제거
     for (const [email, player] of room.players.entries()) {
       if (player.socketId === identifier || email === identifier) {
         room.removePlayer(email);
@@ -230,9 +323,10 @@ class GameRoomManager {
       }
     }
 
-    // 방에 남은 인원이 없다면 메모리에서 방 인스턴스 삭제
     if (room.players.size === 0) {
-      this.deleteRoom(roomId);
+      await this.deleteRoom(roomId);
+    } else {
+      await this.saveRoom(room);
     }
   }
 }

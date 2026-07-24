@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS userState (
 CREATE TABLE IF NOT EXISTS gameRecord (
     gameId BIGINT AUTO_INCREMENT PRIMARY KEY,
 
+    
     blackUserId INT NOT NULL,
     whiteUserId INT NOT NULL,
     winnerUserId INT NULL,

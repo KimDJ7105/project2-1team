@@ -8,8 +8,10 @@ import type { Socket } from 'socket.io-client';
 import type { Room } from '../hooks/useSocket';
 import ProfileView from '../components/Profile/ProfileView';
 import ProfileEdit from '../components/Profile/ProfileEdit';
+import ProfileAvatar from '../components/Profile/ProfileAvatar';
 import HistoryView from '../components/History/HistoryView';
-import { getProfile, updateNickname } from '../api/profileApi';
+import { getProfile } from '../api/profileApi';
+import AugmentBook from '../components/AugmentBook/AugmentBook';
 
 interface LobbyPageProps {
   socket: Socket | null;
@@ -20,6 +22,7 @@ interface LobbyPageProps {
   };
   onLogout: () => void;
   onJoinSuccess: (roomInfo: { roomId: string; roomTitle: string }) => void;
+  onUserUpdate?: (updates: { nickname?: string; profileImage?: string | null }) => void;
 }
 
 interface ProfileState {
@@ -33,9 +36,9 @@ interface ProfileState {
   winRate: number;
 }
 
-type Screen = 'home' | 'profile' | 'profileEdit' | 'history';
+type Screen = 'home' | 'profile' | 'profileEdit' | 'history' | 'augmentBook';
 
-export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout, onJoinSuccess }) => {
+export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout, onJoinSuccess, onUserUpdate }) => {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [activeScreen, setActiveScreen] = useState<Screen>('home');
@@ -116,16 +119,22 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout, on
     return (
       <ProfileEdit
         nickname={profile.nickname}
+        profileImage={profile.profileImage}
         email={user.email}
         userId={user.userId}
         onBackClick={() => setActiveScreen('profile')}
-        onSave={async (newNickname) => {
+        onSave={async () => {
           try {
-            await updateNickname(user.userId, newNickname);
-            setProfile({ ...profile, nickname: newNickname });
+            // 프로필 저장 성공 후 서버에서 최신 프로필을 다시 조회하여 로컬 상태와 App의 user 상태를 갱신
+            const data = await getProfile(user.userId);
+            setProfile(data);
             setActiveScreen('profile');
+            // App의 user 상태 병합 업데이트 요청
+            if (typeof onUserUpdate === 'function') {
+              onUserUpdate({ nickname: data.nickname, profileImage: data.profileImage });
+            }
           } catch (error) {
-            console.error('닉네임 변경 실패', error);
+            console.error('프로필 재조회 실패', error);
           }
         }}
       />
@@ -139,6 +148,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout, on
         onEditClick={() => setActiveScreen('profileEdit')}
         onBackClick={() => setActiveScreen('home')}
         onHistoryClick={() => setActiveScreen('history')}
+         onCodexClick={() => setActiveScreen('augmentBook')}
       />
     );
   }
@@ -148,19 +158,32 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout, on
       <HistoryView
         onBackClick={() => setActiveScreen('home')}
         onProfileClick={() => setActiveScreen('profile')}
+        onCodexClick={() => setActiveScreen('augmentBook')}
+        userId={user.userId}
       />
     );
   }
+
+  if (activeScreen === 'augmentBook') {
+  return (
+    <AugmentBook
+      onHomeClick={() => setActiveScreen('home')}
+      onHistoryClick={() => setActiveScreen('history')}
+      onProfileClick={() => setActiveScreen('profile')}
+    />
+    );
+  }
+
 
   return (
     <div className="phone">
       <div className="pad flex-col flex-1" style={{ gap: '10px' }}>
         <div className="row between">
           <div className="row" style={{ gap: '12px' }}>
-            <div className="avatar" style={{ fontSize: '28px' }}>🦁</div>
+            <ProfileAvatar src={profile.profileImage ?? null} />
             <div className="flex-col" style={{ gap: '2px' }}>
               <div style={{ fontWeight: 800, fontSize: '18px', color: 'var(--text-main)' }}>
-                {user.nickname}님
+                {profile.nickname}님
               </div>
               <span className="badge" style={{ fontSize: '13px', padding: '4px 10px' }}>🏆 0</span>
             </div>
@@ -194,11 +217,12 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout, on
       </div>
       <BottomNav
         onHistoryClick={() => setActiveScreen('history')}
+        onCodexClick={() => setActiveScreen('augmentBook')}
         onProfileClick={() => setActiveScreen('profile')}
       />
       <CreateRoomModal
         visible={showCreateModal}
-        defaultName={`${user.nickname}의 방`}
+        defaultName={`${profile.nickname}의 방`}
         onClose={handleModalClose}
         onCreate={handleModalCreate}
       />

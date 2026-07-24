@@ -1,6 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 import yaml from 'js-yaml';
+import dotenv from 'dotenv';
+
+if (process.env.NODE_ENV !== 'production') {
+  dotenv.config({ path: path.join(__dirname, '../.env') });
+}
 
 export interface ClientConfig {
   url: string;

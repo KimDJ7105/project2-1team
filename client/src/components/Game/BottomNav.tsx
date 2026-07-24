@@ -5,12 +5,14 @@ import React, { useState } from 'react';
 interface BottomNavProps {
   onHomeClick?: () => void;
   onHistoryClick?: () => void;
+  onCodexClick?: () => void;
   onProfileClick?: () => void;
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({
   onHomeClick,
   onHistoryClick,
+  onCodexClick,
   onProfileClick
 }) => {
   const [activeTab, setActiveTab] = useState<string>('home');
@@ -49,7 +51,9 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
       <div
         className={`item ${activeTab === 'codex' ? 'active' : ''}`}
-        onClick={() => setActiveTab('codex')}
+        onClick={() => {setActiveTab('codex');
+          onCodexClick?.();
+        }}
       >
         <span style={{ fontSize: '20px' }}>📖</span>
         <span style={labelStyle}>증강도감</span>

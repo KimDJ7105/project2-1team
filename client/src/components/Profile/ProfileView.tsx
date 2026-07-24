@@ -20,6 +20,7 @@ interface ProfileViewProps {
   profile: ProfileData;
   onBackClick: () => void;
   onHistoryClick: () => void;
+  onCodexClick: () => void;  
 }
 
 export default function ProfileView({
@@ -27,6 +28,7 @@ export default function ProfileView({
   profile,
   onBackClick,
   onHistoryClick,
+  onCodexClick,
 }: ProfileViewProps) {
 
 
@@ -117,6 +119,7 @@ export default function ProfileView({
       <BottomNav
         onHomeClick={onBackClick}
         onHistoryClick={onHistoryClick}
+        onCodexClick={onCodexClick}
       />
     </div>
   );

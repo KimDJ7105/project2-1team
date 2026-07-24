@@ -2,13 +2,14 @@
 import React, { useState, useEffect } from 'react';
 import { Socket } from 'socket.io-client';
 import '../assets/styles/WaitingRoomStyles.css';
+import ProfileAvatar from '../components/Profile/ProfileAvatar';
 
 interface Player {
   socketId: string;
   email?: string;
   nickname: string;
   isReady: boolean;
-  avatar?: string;
+  profileImage?: string | null;
 }
 
 interface WaitingRoomPageProps {
@@ -40,8 +41,8 @@ export const WaitingRoomPage: React.FC<WaitingRoomPageProps> = ({
     const handleRoomUpdate = (data: { players: Player[] }) => {
       if (data && data.players) {
         setPlayers(data.players);
-        // 내 준비 상태 동기화
-        const myInfo = data.players.find((p) => p.nickname === user.nickname || p.socketId === socket.id);
+        // 내 준비 상태 동기화 (email 또는 socketId로 판단)
+        const myInfo = data.players.find((p) => (user?.email && p.email === user.email) || p.socketId === socket.id);
         if (myInfo) {
           setIsReady(myInfo.isReady);
         }
@@ -93,6 +94,12 @@ export const WaitingRoomPage: React.FC<WaitingRoomPageProps> = ({
   const secondPlayer = players[1];
   const totalPlayers = players.length;
 
+  const firstIsMe = firstPlayer && ((user?.email && firstPlayer.email === user.email) || firstPlayer.socketId === socket?.id);
+  const secondIsMe = secondPlayer && ((user?.email && secondPlayer.email === user.email) || secondPlayer.socketId === socket?.id);
+
+  const firstAvatarSrc = firstPlayer?.profileImage ?? (firstIsMe ? user?.profileImage ?? null : null);
+  const secondAvatarSrc = secondPlayer?.profileImage ?? (secondIsMe ? user?.profileImage ?? null : null);
+
   return (
     <div className="phone">
       <div className="pad waiting-room-container">
@@ -106,7 +113,7 @@ export const WaitingRoomPage: React.FC<WaitingRoomPageProps> = ({
         <div className="players-row">
           {/* 첫 번째 플레이어 (방장) */}
           <div className="player-card">
-            <div className="avatar lg">{firstPlayer?.avatar || '🦁'}</div>
+            <ProfileAvatar src={firstAvatarSrc} size="lg" />
             <div className="player-name">{firstPlayer?.nickname || user?.nickname || '입장 중...'}</div>
             {firstPlayer?.isReady && <div className="badge">준비완료!</div>}
           </div>
@@ -115,7 +122,7 @@ export const WaitingRoomPage: React.FC<WaitingRoomPageProps> = ({
           <div className="player-card">
             {secondPlayer ? (
               <>
-                <div className="avatar lg">{secondPlayer.avatar || '🐯'}</div>
+                <ProfileAvatar src={secondAvatarSrc} size="lg" />
                 <div className="player-name">{secondPlayer.nickname}</div>
                 {secondPlayer.isReady && <div className="badge">준비완료!</div>}
               </>

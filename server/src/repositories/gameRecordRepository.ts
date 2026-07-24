@@ -51,5 +51,6 @@ export interface GameRecordRepository {
     boardState: string[][];
     endReason: string;
     totalTurn: number;
+    selectedAugment?: { black: string[]; white: string[] };
   }): Promise<void>;
 }

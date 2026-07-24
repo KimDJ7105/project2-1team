@@ -117,10 +117,13 @@ async saveGameRecord(data: {
   boardState: string[][];
   endReason: string;
   totalTurn: number;
+  selectedAugment?: {
+    black: string[];
+    white: string[];
+  };
 }): Promise<void> {
 
   const pool = getDbPool();
-
 
   const query = `
     INSERT INTO gameRecord
@@ -131,29 +134,22 @@ async saveGameRecord(data: {
       boardState,
       endReason,
       totalTurn,
+      selectedAugment,
       startedAt,
       endedAt
     )
-    VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
+    VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
   `;
 
-
   await pool.query(query, [
-
     data.blackUserId,
-
     data.whiteUserId,
-
     data.winnerUserId,
-
     JSON.stringify(data.boardState),
-
     data.endReason,
-
-    data.totalTurn
-
+    data.totalTurn,
+    JSON.stringify(data.selectedAugment ?? null),
   ]);
-
 }
 
 }
