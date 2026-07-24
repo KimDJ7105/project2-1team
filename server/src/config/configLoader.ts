@@ -3,7 +3,9 @@ import path from 'path';
 import yaml from 'js-yaml';
 import dotenv from 'dotenv';
 
-dotenv.config({ path: path.join(__dirname, '../.env') });
+if (process.env.NODE_ENV !== 'production') {
+  dotenv.config({ path: path.join(__dirname, '../.env') });
+}
 
 export interface ClientConfig {
   url: string;
