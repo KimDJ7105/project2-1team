@@ -131,18 +131,24 @@ export class GameRoom {
       return { success: false, message: '이미 돌이 놓여 있는 자리입니다.' };
     }
 
-    // 상대의 숨겨진 돌 자리를 클릭했다면, 숨겨진 돌 배열에서 제거하고 덮어씌움
-    if (hiddenTargetIndex !== -1) {
-      this.hiddenStones.splice(hiddenTargetIndex, 1);
-      hiddenMoveCrushed = true;
-    }
-
     const isSealed = this.sealedCells.some(cell => cell.x === x && cell.y === y);
     if (isSealed) {
       return { success: false, message: '봉인된 칸에는 돌을 둘 수 없습니다.' };
     }
 
     // 바둑판에 돌 배치
+    if (player.color === 'black') {
+      const ruleCheck = this.checkRenjuRule(x, y, player.color);
+      if (!ruleCheck.isValid) {
+        return { success: false, message: ruleCheck.reason };
+      }
+    }
+
+    if (hiddenTargetIndex !== -1) {
+      this.hiddenStones.splice(hiddenTargetIndex, 1);
+      hiddenMoveCrushed = true;
+    }
+
     this.board[y][x] = this.currentTurn;
     
     // 방금 착수한 돌의 좌표를 기록
@@ -172,6 +178,103 @@ export class GameRoom {
     this.tickHiddenStones();
 
     return { success: true, isWin: false, color: player.color, hiddenMoveCrushed : hiddenMoveCrushed };
+  }
+
+  // 지정된 방향으로 9칸짜리 문자열 추출 (X: 내 돌, _: 빈칸, O: 상대 돌 및 벽)
+  private getLineString(x: number, y: number, dx: number, dy: number, color: string): string {
+    let str = '';
+    for (let i = -4; i <= 4; i++) {
+      const nx = x + i * dx;
+      const ny = y + i * dy;
+      if (nx < 0 || nx > 14 || ny < 0 || ny > 14) {
+        str += 'O';
+      } else {
+        const cell = this.board[ny][nx];
+        if (cell === color) str += 'X';
+        else if (cell === '') str += '_';
+        else str += 'O';
+      }
+    }
+    return str;
+  }
+
+  // 4가 만들어지는 개수 계산
+  private getFoursCount(line: string): number {
+    const winningIndices: number[] = [];
+    for (let i = 0; i < line.length; i++) {
+      if (line[i] === '_') {
+        const testLine = line.substring(0, i) + 'X' + line.substring(i + 1);
+        if (testLine.includes('XXXXX') && !testLine.includes('XXXXXX')) {
+          winningIndices.push(i);
+        }
+      }
+    }
+    
+    if (winningIndices.length === 0) return 0;
+    if (winningIndices.length === 1) return 1;
+    if (winningIndices.length === 2) {
+      if (winningIndices[1] - winningIndices[0] === 5) {
+        return 1;
+      }
+      return 2;
+    }
+    return 2;
+  }
+
+  // 열린 3이 존재하는지 판별
+  private hasOpenThree(line: string): boolean {
+    for (let i = 0; i < line.length; i++) {
+      if (line[i] === '_') {
+        const testLine = line.substring(0, i) + 'X' + line.substring(i + 1);
+        if (this.getFoursCount(testLine) === 1) {
+          const winIndices: number[] = [];
+          for (let j = 0; j < testLine.length; j++) {
+            if (testLine[j] === '_') {
+              const testLine2 = testLine.substring(0, j) + 'X' + testLine.substring(j + 1);
+              if (testLine2.includes('XXXXX') && !testLine2.includes('XXXXXX')) {
+                winIndices.push(j);
+              }
+            }
+          }
+          if (winIndices.length === 2 && winIndices[1] - winIndices[0] === 5) {
+             return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  // 렌주룰 통합 검증 로직
+  private checkRenjuRule(x: number, y: number, color: string): { isValid: boolean; reason?: string } {
+    const directions = [[1, 0], [0, 1], [1, 1], [1, -1]];
+    let isFive = false;
+    let isOverline = false;
+    let totalFours = 0;
+    let totalOpenThrees = 0;
+
+    this.board[y][x] = color;
+
+    for (const [dx, dy] of directions) {
+      const line = this.getLineString(x, y, dx, dy, color);
+
+      if (line.includes('XXXXXX')) isOverline = true;
+      if (line.includes('XXXXX') && !line.includes('XXXXXX')) isFive = true;
+
+      totalFours += this.getFoursCount(line);
+      if (this.hasOpenThree(line)) totalOpenThrees++;
+    }
+
+    this.board[y][x] = '';
+
+    // 정확히 5목이 완성되면 모든 금수를 무시하고 승리 처리
+    if (isFive) return { isValid: true };
+
+    if (isOverline) return { isValid: false, reason: '6목 이상(장목)은 금수입니다.' };
+    if (totalFours >= 2) return { isValid: false, reason: '4-4 자리는 금수입니다.' };
+    if (totalOpenThrees >= 2) return { isValid: false, reason: '3-3 자리는 금수입니다.' };
+
+    return { isValid: true };
   }
 
   public tickHiddenStones(): void {
@@ -217,7 +320,7 @@ export class GameRoom {
       }
 
       // 연속된 돌이 5개 이상이면 승리
-      if (count === 5) {
+      if (count >= 5) {
         return true;
       }
     }
@@ -288,7 +391,6 @@ export class GameRoom {
     };
   }
 }
-
 
 class GameRoomManager {
   public async getRoom(roomId: string): Promise<GameRoom | undefined> {
