@@ -375,7 +375,6 @@ export const GamePage: React.FC<GamePageProps> = ({
               {currentTurn === myColor && <div className="game-badge">내 차례</div>}
             </div>
           </div>
-          <span className="game-timer">⏱ 00:45</span>
           <div className="game-row">
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontSize: '13px', fontWeight: 700 }}>

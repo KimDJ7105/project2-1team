@@ -18,6 +18,8 @@ import { gameRecordRepositoryImpl } from "./repositories/mysqlGameRecordReposito
 import { AUGMENT_MAP } from './shared/data/augments';
 import { userRepository, userStateRepository } from './repositories';
 
+/* CI/CD 테스트용  의미 없는 주석문 삽입*/
+
 // redis adaptor 관련 
 import { createAdapter } from '@socket.io/redis-adapter';
 import { createClient } from 'redis';
