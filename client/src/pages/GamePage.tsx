@@ -523,25 +523,21 @@ export const GamePage: React.FC<GamePageProps> = ({
         </div>
 
         <div className="action-row">
-          <button className="game-btn danger" onClick={handleSurrender}>
-            항복
-          </button>
+          {gameOverData?.isOver ? (
+            <button 
+              className="game-btn" 
+              onClick={() => setIsOverlayHidden(false)}
+              style={{ background: 'var(--teal)', color: '#0e3833', border: 'none', boxShadow: '0 5px 0 var(--teal-dark)' }}
+            >
+              결과 다시 보기
+            </button>
+          ) : (
+            <button className="game-btn danger" onClick={handleSurrender}>
+              항복
+            </button>
+          )}
         </div>
       </div>
-
-      {gameOverData?.isOver && isOverlayHidden && (
-        <button
-          onClick={() => setIsOverlayHidden(false)}
-          style={{
-            position: 'absolute', top: '16px', left: '50%', transform: 'translateX(-50%)',
-            zIndex: 90, background: 'var(--teal)', color: '#0e3833', border: 'none',
-            padding: '8px 16px', borderRadius: '20px', fontFamily: 'Jua, sans-serif',
-            boxShadow: '0 4px 10px rgba(0,0,0,0.15)', cursor: 'pointer'
-          }}
-        >
-          🏆 결과 다시 보기
-        </button>
-      )}
 
       {gameOverData?.isOver && !isOverlayHidden && (
         <div className="result-overlay">
