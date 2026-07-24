@@ -26,6 +26,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: debug OIDC context
+        run: |
+          echo "GITHUB_REPOSITORY=${GITHUB_REPOSITORY}"
+          echo "GITHUB_REF=${GITHUB_REF}"
+          echo "GITHUB_REF_NAME=${GITHUB_REF_NAME}"
+          echo "GITHUB_EVENT_NAME=${GITHUB_EVENT_NAME}"
+          echo "GITHUB_ACTOR=${GITHUB_ACTOR}"
+          echo "GITHUB_WORKFLOW=${GITHUB_WORKFLOW}"
+
       # 임시: 계정 SCP가 GitHub OIDC의 sts:AssumeRoleWithWebIdentity를 막고 있어서
       # 관리자 확인 전까지 액세스키 방식으로 대체함. 해결되면 role-to-assume(OIDC)으로 복귀할 것
       - uses: aws-actions/configure-aws-credentials@v4
@@ -102,6 +111,7 @@ jobs:
       - name: apply manifests
         run: |
           kubectl apply \
+            -f infra/k8s/rbac-ci.yaml \
             -f infra/k8s/service-account.yaml \
             -f infra/k8s/external-secret-config.yaml \
             -f infra/k8s/external-secret.yaml \

@@ -1,0 +1,26 @@
+# AWS 관리형 EKS 액세스 정책(AmazonEKSEditPolicy)은 external-secrets.io 같은
+# 커스텀 리소스(CRD)는 커버하지 않으므로, CI 배포 주체(IAM role/user)가
+# ExternalSecret/SecretStore를 apply할 수 있도록 별도 RBAC 권한을 부여함
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: team1-ci-external-secrets-editor
+  namespace: default
+rules:
+  - apiGroups: ["external-secrets.io"]
+    resources: ["secretstores", "externalsecrets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: team1-ci-external-secrets-editor-binding
+  namespace: default
+subjects:
+  - kind: Group
+    name: team1-ci-deployers
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: team1-ci-external-secrets-editor
+  apiGroup: rbac.authorization.k8s.io

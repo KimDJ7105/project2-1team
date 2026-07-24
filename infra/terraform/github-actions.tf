@@ -72,6 +72,13 @@ data "aws_iam_policy_document" "github_actions_ecr" {
     ]
     resources = [data.aws_ecr_repository.team1.arn]
   }
+
+  # aws eks update-kubeconfig가 클러스터 엔드포인트/인증서 정보를 조회하는 데 필요
+  # (EKS 접근 자체는 access entry가 주지만, 이 API 호출 권한은 별도로 필요함)
+  statement {
+    actions   = ["eks:DescribeCluster"]
+    resources = [module.eks.cluster_arn]
+  }
 }
 
 resource "aws_iam_policy" "github_actions_ecr" {
@@ -93,6 +100,10 @@ resource "aws_eks_access_entry" "github_actions_deploy" {
   cluster_name  = module.eks.cluster_name
   principal_arn = aws_iam_role.github_actions_deploy.arn
   type          = "STANDARD"
+
+  # AmazonEKSEditPolicy가 external-secrets.io 같은 CRD는 못 다뤄서
+  # infra/k8s/rbac-ci.yaml의 Role/RoleBinding으로 별도 권한을 부여하기 위한 그룹
+  kubernetes_groups = ["team1-ci-deployers"]
 }
 
 resource "aws_eks_access_policy_association" "github_actions_deploy" {
