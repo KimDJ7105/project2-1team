@@ -328,11 +328,6 @@ export const GamePage: React.FC<GamePageProps> = ({
   const handleAugmentClick = (aug: any) => {
     if (!aug) return;
 
-    if (aug.isUsed) {
-      alert('이미 사용한 증강입니다.');
-      return;
-    }
-
     if (currentTurn !== myColor) {
       alert('자신의 턴에만 증강을 사용할 수 있습니다.');
       return;
@@ -343,6 +338,13 @@ export const GamePage: React.FC<GamePageProps> = ({
 
   const handleConfirmUseAugment = () => {
     if (!socket || !selectedAugmentToUse) return;
+
+    // 이미 사용한 증강인 경우 실행 차단
+    if (selectedAugmentToUse.isUsed) {
+      alert('이미 사용한 증강입니다.');
+      setSelectedAugmentToUse(null);
+      return;
+    }
 
     if (selectedAugmentToUse.type === 'TARGET_SELECT') {
       setAugmentTargetMode(selectedAugmentToUse);
@@ -501,12 +503,20 @@ export const GamePage: React.FC<GamePageProps> = ({
 
               return (
                 <div 
-                  key={idx} 
-                  className={`inv-slot my ${aug ? 'filled' : ''} ${aug?.isUsed ? 'used' : ''}`}
-                  style={aug?.isUsed ? { opacity: 0.4, filter: 'grayscale(100%)', cursor: 'not-allowed' } : {}}
-                  onClick={() => handleAugmentClick(aug)}
-                >
-                  {displayIcon ? displayIcon : '＋'}
+                    key={idx} 
+                    className={`inv-slot my ${aug ? 'filled' : ''} ${aug?.isUsed ? 'used' : ''}`}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      ...(aug?.isUsed ? { opacity: 0.4, filter: 'grayscale(100%)' } : {})
+                    }}
+                    onClick={() => handleAugmentClick(aug)}
+                  >
+                    <span style={{ fontSize: '20px' }}>{displayIcon ? displayIcon : '＋'}</span>
+                    {aug && <span style={{ fontSize: '9px', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}>{aug.name}</span>}
                 </div>
               );
             })}
@@ -635,19 +645,21 @@ export const GamePage: React.FC<GamePageProps> = ({
 
             <div className="action-row" style={{ display: 'flex', gap: '8px' }}>
               <button
-                className="game-btn ghost"
-                style={{ flex: 1, background: '#fffefb', border: '1.5px solid var(--card-border)', color: 'var(--text-main)' }}
-                onClick={() => setSelectedAugmentToUse(null)}
-              >
-                취소
-              </button>
-              <button
-                className="game-btn"
-                style={{ flex: 1, background: 'var(--teal)', color: '#0e3833', border: 'none' }}
-                onClick={handleConfirmUseAugment}
-              >
-                사용하기
-              </button>
+                  className="game-btn ghost"
+                  style={{ flex: 1, background: '#fffefb', border: '1.5px solid var(--card-border)', color: 'var(--text-main)' }}
+                  onClick={() => setSelectedAugmentToUse(null)}
+                >
+                  닫기
+                </button>
+                {!selectedAugmentToUse?.isUsed && (
+                  <button
+                    className="game-btn"
+                    style={{ flex: 1, background: 'var(--teal)', color: '#0e3833', border: 'none' }}
+                    onClick={handleConfirmUseAugment}
+                  >
+                    사용하기
+                  </button>
+                )}
             </div>
           </div>
         </div>
