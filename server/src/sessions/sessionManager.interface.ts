@@ -37,4 +37,9 @@ export interface ISessionManager {
   // pod 간에 락 기능 구현용 
   releaseLock(key: string): Promise<void>;
   acquireLockWithRetry(key: string, ttlSeconds: number, retryCount?: number, delayMs?: number): Promise<boolean>;
+
+  // O(1)로 검사하기 위한 메서드 
+  setUserRoom(email: string, roomId: string): Promise<void>;
+  getUserRoom(email: string): Promise<string | null>;
+  deleteUserRoom(email: string): Promise<void>;
 }

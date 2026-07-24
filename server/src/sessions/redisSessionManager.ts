@@ -190,6 +190,21 @@ export class RedisSessionManager implements ISessionManager {
     return false;
   }
 
+  // 유저와 룸을 1대1로 묶어서 저장
+  async setUserRoom(email: string, roomId: string): Promise<void> {
+    await this.redisClient.set(`user_room:${email}`, roomId);
+  }
+
+  // O(1)로 유저가 있던 룸을 탐색
+  async getUserRoom(email: string): Promise<string | null> {
+    return await this.redisClient.get(`user_room:${email}`);
+  }
+
+  // 유저와 룸 매핑 정보를 제거 
+  async deleteUserRoom(email: string): Promise<void> {
+    await this.redisClient.del(`user_room:${email}`);
+  }
+
 }
 
 //싱글톤

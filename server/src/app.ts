@@ -6,7 +6,6 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import userRoutes from './routes/userRoutes'; // 라우터 가져오기
 import { socketAuthMiddleware, AuthenticatedSocket } from './sessions/socketAuth';
-import { disconnectTimerManager } from './sessions/disconnectTimerManager';
 import { redisSessionManager } from './sessions/redisSessionManager';
 import { SCRoomSummary } from './shared/types/game_data';
 import { gameRoomManager } from './rooms/GameRoom';
@@ -251,24 +250,26 @@ io.on('connection', (socket: AuthenticatedSocket) => {
   if (userEmail) {
     (async () => {
       try {
-        const roomsData = await redisSessionManager.getAllRooms();
-        for (const roomStr of roomsData) {
-          const roomSummary = JSON.parse(roomStr);
-          const roomInstance = await gameRoomManager.getRoom(roomSummary.roomId);
+        const roomId = await redisSessionManager.getUserRoom(userEmail);
+        
+        if (roomId) {
+          const roomInstance = await gameRoomManager.getRoom(roomId);
           if (roomInstance) {
             const player = Array.from(roomInstance.players.values()).find(p => p.email === userEmail);
             if (player) {
               player.socketId = socket.id;
               socket.join(roomInstance.roomId);
-              await gameRoomManager.saveRoom(roomInstance); // 소켓 ID가 갱신되었으므로 Redis에 저장
+              await gameRoomManager.saveRoom(roomInstance);
 
               socket.emit('room:reconnect', {
                 roomId: roomInstance.roomId,
                 roomTitle: roomInstance.roomTitle,
                 status: roomInstance.status
               });
-              break;
             }
+          } else {
+            // 방이 이미 폭파되었는데 유저 매핑 정보만 남은 경우 찌꺼기 삭제
+            await redisSessionManager.deleteUserRoom(userEmail);
           }
         }
       } catch (err) {
@@ -328,6 +329,10 @@ io.on('connection', (socket: AuthenticatedSocket) => {
         roomInstance.addPlayer(userId, userEmail, (latest.nickname ?? userEmail ?? ''), socket.id, latest.profileImage ?? null);
       } catch (err) {
         roomInstance.addPlayer(userId, userEmail, (socket.user?.nickname ?? userNickname ?? userEmail ?? ''), socket.id, socket.user?.profileImage ?? null);
+      }
+
+      if (userEmail) {
+        await redisSessionManager.setUserRoom(userEmail, roomId);
       }
 
       // 플레이어가 추가된 최신 방 상태를 Redis에 저장
@@ -407,6 +412,9 @@ io.on('connection', (socket: AuthenticatedSocket) => {
         socket.emit('room:join:fail', { message: '방 인원이 가득 찼습니다.' });
         return;
       }
+
+      // 플레이어와 룸 연결 정보를 저장 
+      await redisSessionManager.setUserRoom(userEmail, roomId);
 
       // 플레이어가 추가된 최신 방 상태를 Redis에 저장
       await gameRoomManager.saveRoom(roomInstance);
@@ -539,6 +547,9 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     try {
       socket.leave(roomId);
       await gameRoomManager.leaveRoom(roomId, userEmail || socket.id);
+      if (userEmail) {
+        await redisSessionManager.deleteUserRoom(userEmail);
+      }
       // 남은 사람들에게 인원 변경 알림
       const room = await gameRoomManager.getRoom(roomId);
       if (room) {
@@ -1607,6 +1618,7 @@ async function startServer() {
 
               // 방에서 플레이어 제거
               await gameRoomManager.leaveRoom(room.roomId, player.socketId);
+              await redisSessionManager.deleteUserRoom(email);
 
               // 남은 사람들에게 업데이트 알림 또는 방 폭파
               const remainingRoom = await gameRoomManager.getRoom(room.roomId);
