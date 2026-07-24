@@ -1,0 +1,15 @@
+# 백엔드 Pod들을 하나의 고정 내부 주소로 묶는 Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: team1-backend-svc
+  namespace: default
+spec:
+  type: ClusterIP  # 외부 노출은 Ingress가 담당
+
+  selector:
+    app: team1-backend
+
+  ports:
+    - port: 8080
+      targetPort: 8080
