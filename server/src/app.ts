@@ -1,3 +1,4 @@
+// CI/CD OIDC 디버그 트리거용 주석
 import "dotenv/config";
 import express from 'express';
 import { initializeDatabase } from './repositories/mysqlClient';
