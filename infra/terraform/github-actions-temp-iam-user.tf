@@ -19,6 +19,10 @@ resource "aws_eks_access_entry" "backend_ci" {
   cluster_name  = module.eks.cluster_name
   principal_arn = aws_iam_user.github_actions_backend_ci.arn
   type          = "STANDARD"
+
+  # AmazonEKSEditPolicy가 external-secrets.io 같은 CRD는 못 다뤄서
+  # infra/k8s/rbac-ci.yaml의 Role/RoleBinding으로 별도 권한을 부여하기 위한 그룹
+  kubernetes_groups = ["team1-ci-deployers"]
 }
 
 resource "aws_eks_access_policy_association" "backend_ci" {
