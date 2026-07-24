@@ -102,6 +102,7 @@ jobs:
       - name: apply manifests
         run: |
           kubectl apply \
+            -f infra/k8s/rbac-ci.yaml \
             -f infra/k8s/service-account.yaml \
             -f infra/k8s/external-secret-config.yaml \
             -f infra/k8s/external-secret.yaml \
