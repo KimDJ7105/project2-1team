@@ -14,3 +14,8 @@ output "github_actions_deploy_role_arn" {
   description = "GitHub Actions 배포 워크플로우가 assume할 IAM 역할 ARN (repo Variables에 등록)"
   value       = aws_iam_role.github_actions_deploy.arn
 }
+
+output "github_actions_frontend_deploy_role_arn" {
+  description = "GitHub Actions 프론트엔드 배포 워크플로우가 assume할 IAM 역할 ARN (repo Variables에 등록)"
+  value       = aws_iam_role.github_actions_frontend_deploy.arn
+}
