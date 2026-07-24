@@ -217,7 +217,7 @@ export class GameRoom {
       }
 
       // 연속된 돌이 5개 이상이면 승리
-      if (count >= 5) {
+      if (count === 5) {
         return true;
       }
     }
