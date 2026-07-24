@@ -7,13 +7,13 @@ module "eks" {
   cluster_name    = var.cluster_name
   cluster_version = var.cluster_version
 
-  cluster_endpoint_public_access  = true  # 로컬에서 kubectl 접속 허용
-  cluster_endpoint_private_access = true  # 클러스터 내부 통신용
+  cluster_endpoint_public_access  = true # 로컬에서 kubectl 접속 허용
+  cluster_endpoint_private_access = true # 클러스터 내부 통신용
 
   vpc_id     = var.vpc_id
-  subnet_ids = var.private_subnet_ids  # 기존 Private 서브넷 재사용
+  subnet_ids = var.private_subnet_ids # 기존 Private 서브넷 재사용
 
-  enable_irsa = true  # Pod별 IAM 권한 부여(IRSA) 기능 활성화
+  enable_irsa = true # Pod별 IAM 권한 부여(IRSA) 기능 활성화
 
   # 워커노드 그룹 (기존 EC2 ASG 역할 대체)
   eks_managed_node_groups = {

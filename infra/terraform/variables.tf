@@ -29,13 +29,13 @@ variable "cluster_version" {
 }
 
 variable "rds_sg_id" {
-  default = "sg-041fd8b3182b64c10"  # 기존 team1-sg-rds
+  default = "sg-041fd8b3182b64c10" # 기존 team1-sg-rds
 }
 
 variable "elasticache_sg_id" {
-  default = "sg-0e461aeb186420897"  # 기존 team1-sg-elasticache
+  default = "sg-0e461aeb186420897" # 기존 team1-sg-elasticache
 }
 
 variable "acm_cert_arn" {
-  default = "arn:aws:acm:ap-northeast-2:727646470302:certificate/9085e196-5c96-4d18-9214-315810d902e6"  # jhyang.click SSL 인증서
+  default = "arn:aws:acm:ap-northeast-2:727646470302:certificate/9085e196-5c96-4d18-9214-315810d902e6" # jhyang.click SSL 인증서
 }
