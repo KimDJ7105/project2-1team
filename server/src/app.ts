@@ -1555,7 +1555,14 @@ async function startServer() {
     ]);
 
     // Redis 서버 설정: 키 만료 이벤트를 발생시키도록 설정 (AWS ElastiCache 등 외부 인프라 사용 시 파라미터 그룹에서 직접 설정해야 할 수 있음)
-    await pubClient.configSet('notify-keyspace-events', 'Ex');
+    if (process.env.NODE_ENV !== 'production') {
+      try {
+        await pubClient.configSet('notify-keyspace-events', 'Ex');
+        console.log('[Redis] 개발 환경: 키 만료 이벤트(Ex) 설정 완료');
+      } catch (err) {
+        console.warn('[Redis] configSet 설정 실패:', err);
+      }
+    }
 
     io.adapter(createAdapter(pubClient, subClient));
 
