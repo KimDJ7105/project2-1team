@@ -1,0 +1,78 @@
+name: Deploy to EKS (prod)
+
+on:
+  push:
+    branches: [prod]
+    paths:
+      - "server/**"
+      - "infra/k8s/**"
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+  EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr-login
+
+      - name: set image tag
+        run: echo "IMAGE_TAG=prod-${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+
+      - name: build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: server
+          push: true
+          tags: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+
+      - name: update kubeconfig
+        run: aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION"
+
+      - name: install yq
+        run: |
+          curl -sSL https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 \
+            -o /usr/local/bin/yq
+          chmod +x /usr/local/bin/yq
+
+      - name: set new image in deployment manifest
+        run: |
+          yq -i '.spec.template.spec.containers[0].image = "'"$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"'"' \
+            infra/k8s/deployment.yaml
+
+      - name: apply manifests
+        run: |
+          kubectl apply \
+            -f infra/k8s/service-account.yaml \
+            -f infra/k8s/external-secret-config.yaml \
+            -f infra/k8s/external-secret.yaml \
+            -f infra/k8s/service.yaml \
+            -f infra/k8s/hpa.yaml \
+            -f infra/k8s/ingress.yaml \
+            -f infra/k8s/deployment.yaml
+
+      - name: wait for rollout
+        run: kubectl rollout status deployment/team1-backend -n default --timeout=180s
+
+      - name: smoke test (non-blocking)
+        continue-on-error: true
+        run: curl -sf https://api.jhyang.click/health
