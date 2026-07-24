@@ -7,7 +7,6 @@ on:
       - "client/**"
 
 permissions:
-  id-token: write
   contents: read
 
 concurrency:
@@ -37,9 +36,12 @@ jobs:
       - run: npm ci
       - run: npm run build
 
+      # 임시: 계정 SCP가 GitHub OIDC의 sts:AssumeRoleWithWebIdentity를 막고 있어서
+      # 관리자 확인 전까지 액세스키 방식으로 대체함. 해결되면 role-to-assume(OIDC)으로 복귀할 것
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.FRONTEND_DEPLOY_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_FRONTEND_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_FRONTEND_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
       # index.html은 캐시하면 새 배포를 못 받아볼 수 있어 짧게, 나머지 정적
