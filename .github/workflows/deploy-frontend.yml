@@ -17,6 +17,8 @@ env:
   AWS_REGION: ${{ vars.AWS_REGION }}
   S3_FRONTEND_BUCKET: ${{ vars.S3_FRONTEND_BUCKET }}
   CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
+  # Vite는 빌드 시점에 이 값을 번들에 박아넣으므로 build 스텝 이전에 반드시 설정되어야 함
+  VITE_SERVER_URL: ${{ vars.VITE_SERVER_URL }}
 
 jobs:
   deploy:
