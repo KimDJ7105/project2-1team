@@ -1,5 +1,4 @@
 // client/src/components/AugmentBook/AugmentBook.tsx
-import React from 'react';
 import { AUGMENT_BOOK } from './augmentData';
 import { BottomNav } from '../Game/BottomNav';
 
