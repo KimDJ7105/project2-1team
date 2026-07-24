@@ -1,0 +1,27 @@
+# 외부 트래픽 -> ALB -> Service 연결 (AWS Load Balancer Controller가 감지)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: team1-backend-ingress
+  namespace: default
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-northeast-2:727646470302:certificate/9085e196-5c96-4d18-9214-315810d902e6
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}, {"HTTP":80}]'
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    # Socket.io 웹소켓 고정 세션 (동일 클라이언트 -> 동일 Pod)
+    alb.ingress.kubernetes.io/target-group-attributes: stickiness.enabled=true,stickiness.lb_cookie.duration_seconds=3600
+spec:
+  rules:
+    - host: api.jhyang.click
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: team1-backend-svc
+                port:
+                  number: 8080
