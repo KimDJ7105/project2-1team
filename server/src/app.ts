@@ -254,7 +254,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
         
         if (roomId) {
           const roomInstance = await gameRoomManager.getRoom(roomId);
-          if (roomInstance) {
+          if (roomInstance && roomInstance.status !== 'finished') {
             const player = Array.from(roomInstance.players.values()).find(p => p.email === userEmail);
             if (player) {
               player.socketId = socket.id;
@@ -266,6 +266,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
                 roomTitle: roomInstance.roomTitle,
                 status: roomInstance.status
               });
+              console.log(`[자동 방 복구] ${userNickname}(${userEmail}) 님이 진행 중인 방(${roomId})으로 자동 복구되었습니다.`);
             }
           } else {
             // 방이 이미 폭파되었는데 유저 매핑 정보만 남은 경우 찌꺼기 삭제
@@ -651,18 +652,9 @@ io.on('connection', (socket: AuthenticatedSocket) => {
   // 착수 요청 이벤트 핸들러
   socket.on('game:put_stone', async ({ roomId, x, y }: { roomId: string; x: number; y: number }) => {
     // 방 아이디를 기반으로 고유한 락 키 생성
-    const lockKey = `room_update:${roomId}`;
-    let locked = false;
     try {
       if (!userEmail) {
         socket.emit('game:error', { message: '인증되지 않은 사용자입니다.' });
-        return;
-      }
-
-      // 방 수정을 위한 락 획득 시도 (2초 타임아웃)
-      locked = await redisSessionManager.acquireLockWithRetry(lockKey, 2);
-      if (!locked) {
-        socket.emit('game:error', { message: '서버 혼잡으로 인해 처리가 지연되었습니다. 다시 시도해 주세요.' });
         return;
       }
 
@@ -766,10 +758,6 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     } catch (err) {
       console.error('착수 처리 중 오류:', err);
       socket.emit('game:error', { message: '착수 처리 중 서버 오류가 발생했습니다.' });
-    } finally {
-      if(locked) {
-        await redisSessionManager.releaseLock(lockKey);
-      }
     }
   });
   
@@ -821,18 +809,9 @@ io.on('connection', (socket: AuthenticatedSocket) => {
   });
 
   socket.on('game:augment:use', async ({ roomId, augmentId, target }: { roomId: string; augmentId: string; target?: { x: number; y: number } }) => {
-    const lockKey = `room_update:${roomId}`;
-    let locked = false;
-
     try {
       if (!userEmail) {
         socket.emit('game:error', { message: '인증되지 않은 사용자입니다.' });
-        return;
-      }
-
-      locked = await redisSessionManager.acquireLockWithRetry(lockKey, 2);
-      if (!locked) {
-        socket.emit('game:error', { message: '서버 혼잡으로 인해 처리가 지연되었습니다. 다시 시도해 주세요.' });
         return;
       }
 
@@ -1423,11 +1402,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     } catch (err) {
       console.error('증강 사용 처리 중 오류:', err);
       socket.emit('game:error', { message: '증강 사용 처리 중 서버 오류가 발생했습니다.' });
-    } finally {
-      if(locked) {
-        await redisSessionManager.releaseLock(lockKey);
-      }
-    }
+    } 
   });
 
   //항복 요청 처리 

@@ -161,7 +161,7 @@ export class RedisSessionManager implements ISessionManager {
   // 타이머 및 분산 락 관련 메서드 추가
   async setDisconnectTimer(email: string, roomId: string): Promise<void> {
     // 5초 뒤에 만료되는 키 생성, 값으로 roomId를 저장하여 방 정보 추적
-    await this.redisClient.set(`disconnect_timer:${email}`, roomId, 'EX', 5);
+    await this.redisClient.set(`disconnect_timer:${email}`, roomId, 'EX', 15);
   }
 
   async clearDisconnectTimer(email: string): Promise<void> {
