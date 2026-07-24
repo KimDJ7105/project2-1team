@@ -7,6 +7,7 @@ import { getGameRecords } from '../../api/gameRecordApi';
 interface HistoryViewProps {
   onBackClick: () => void;
   onProfileClick: () => void;
+  onCodexClick: () => void; 
   userId: number;
 }
 
@@ -29,7 +30,7 @@ const badgeLabel: Record<string, string> = {
   draw: '무',
 };
 
-export default function HistoryView({ onBackClick, onProfileClick, userId }: HistoryViewProps) {
+export default function HistoryView({ onBackClick, onProfileClick, onCodexClick, userId }: HistoryViewProps) {
   const [selectedGame, setSelectedGame] = useState<GameRecord | null>(null);
 const [history, setHistory] = useState<GameRecord[]>([]);
  
@@ -107,6 +108,7 @@ useEffect(() => {
 
       <BottomNav
         onHomeClick={onBackClick}
+        onCodexClick={onCodexClick}
         onProfileClick={onProfileClick}
       />
     </div>

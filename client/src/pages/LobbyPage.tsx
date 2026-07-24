@@ -11,6 +11,7 @@ import ProfileEdit from '../components/Profile/ProfileEdit';
 import ProfileAvatar from '../components/Profile/ProfileAvatar';
 import HistoryView from '../components/History/HistoryView';
 import { getProfile } from '../api/profileApi';
+import AugmentBook from '../components/AugmentBook/AugmentBook';
 
 interface LobbyPageProps {
   socket: Socket | null;
@@ -35,7 +36,7 @@ interface ProfileState {
   winRate: number;
 }
 
-type Screen = 'home' | 'profile' | 'profileEdit' | 'history';
+type Screen = 'home' | 'profile' | 'profileEdit' | 'history' | 'augmentBook';
 
 export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout, onJoinSuccess, onUserUpdate }) => {
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -147,6 +148,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout, on
         onEditClick={() => setActiveScreen('profileEdit')}
         onBackClick={() => setActiveScreen('home')}
         onHistoryClick={() => setActiveScreen('history')}
+         onCodexClick={() => setActiveScreen('augmentBook')}
       />
     );
   }
@@ -156,10 +158,22 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout, on
       <HistoryView
         onBackClick={() => setActiveScreen('home')}
         onProfileClick={() => setActiveScreen('profile')}
+        onCodexClick={() => setActiveScreen('augmentBook')}
         userId={user.userId}
       />
     );
   }
+
+  if (activeScreen === 'augmentBook') {
+  return (
+    <AugmentBook
+      onHomeClick={() => setActiveScreen('home')}
+      onHistoryClick={() => setActiveScreen('history')}
+      onProfileClick={() => setActiveScreen('profile')}
+    />
+    );
+  }
+
 
   return (
     <div className="phone">
@@ -203,6 +217,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({ socket, user, onLogout, on
       </div>
       <BottomNav
         onHistoryClick={() => setActiveScreen('history')}
+        onCodexClick={() => setActiveScreen('augmentBook')}
         onProfileClick={() => setActiveScreen('profile')}
       />
       <CreateRoomModal
