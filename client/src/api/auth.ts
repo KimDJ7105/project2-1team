@@ -1,16 +1,23 @@
 // client/src/api/auth.ts
 // 회원가입 및 로그인을 처리하는 api 
 
-
 import axios from 'axios';
 
 // 백엔드 Express 서버 주소를 베이스 URL로 설정
 const API = axios.create({
-  baseURL: 'http://localhost:8080/api/users',
+  baseURL: import.meta.env.VITE_SERVER_URL,
   headers: {
     'Content-Type': 'application/json',
   },
   withCredentials: true, // CORS 상황에서 쿠키나 세션 인증 정보를 주고받기 위한 설정
+});
+
+API.interceptors.request.use((config) => {
+  const token = sessionStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
 });
 
 // 회원가입 요청 시 보낼 데이터 타입 정의
@@ -41,17 +48,34 @@ export interface UserResponse {
 // 서버 응답의 공통 포맷 정의
 export interface AuthResponse {
   message: string;
+  token?: string;
   user: UserResponse;
 }
 
 // 1. 회원가입 API 호출 함수
 export const registerAPI = async (data: RegisterRequest): Promise<AuthResponse> => {
-  const response = await API.post<AuthResponse>('/register', data);
+  const response = await API.post<AuthResponse>('/api/users/register', data);
   return response.data;
 };
 
 // 2. 로그인 API 호출 함수
 export const loginAPI = async (data: LoginRequest): Promise<AuthResponse> => {
-  const response = await API.post<AuthResponse>('/login', data);
+  const response = await API.post<AuthResponse>('/api/users/login', data);
+  return response.data;
+};
+
+// 3. 로그아웃 API 호출 함수
+export const logoutAPI = async () => {
+  const token = sessionStorage.getItem('token');
+  return await API.post('/api/users/logout', { token });
+};
+
+// 4. 세션 검증 API 호출 
+export const getMeAPI = async (token: string): Promise<AuthResponse> => {
+  const response = await API.get('/api/users/me', {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
   return response.data;
 };

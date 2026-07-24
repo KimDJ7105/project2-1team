@@ -1,5 +1,8 @@
 // server/src/sessions/sessionManager.interface.ts
 export interface ISessionManager {
+  // email로 토큰 검색 
+  getActiveSessionByEmail(email: string): Promise<string | null>;
+
   // 세션 생성 (로그인 성공 시 세션 토큰 반환)
   createSession(userId: string, data: Record<string, any>, ttlSeconds: number): Promise<string>;
 
@@ -11,4 +14,10 @@ export interface ISessionManager {
 
   // 세션 연장 (실시간 활동 시 만료 시간 갱신)
   touchSession(sessionId: string, ttlSeconds: number): Promise<void>;
+
+  // [추가] 방 목록 조회용 (Redis Hash 전체 가져오기)
+  getAllRooms(): Promise<string[]>;
+
+  // [추가] 방 생성/저장용
+  saveRoom(roomId: string, roomData: Record<string, any>): Promise<void>;
 }

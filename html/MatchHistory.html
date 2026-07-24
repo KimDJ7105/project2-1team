@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>증강오목 - 전적 조회</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --teal:#3ecfc0;
+    --teal-dark:#22988c;
+    --text-main:#4a3823;
+    --text-sub:#93805f;
+    --card-border:#f0dfc0;
+    --page-bg:#e9e2d3;
+    --win:#3ecfc0;
+    --lose:#f3c3b8;
+    --draw:#e2d8c2;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:'Gowun Dodum', sans-serif;
+    background:var(--page-bg);
+    color:var(--text-main);
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+  }
+  .phone{
+    width:390px;
+    height:750px;
+    background:#fff7e8;
+    border-radius:34px;
+    overflow:hidden;
+    box-shadow:0 24px 48px -18px #0000004a;
+    display:flex;
+    flex-direction:column;
+  }
+  .pad{padding:18px 18px 0; display:flex; flex-direction:column; flex:1; min-height:0;}
+  .row{display:flex; align-items:center; gap:10px;}
+
+  .muted{color:var(--text-sub);}
+  .section-label{font-size:12px; color:var(--text-sub); margin:14px 0 8px;}
+
+  .list{display:flex; flex-direction:column; gap:8px; overflow-y:auto;}
+  .list-item{
+    background:#fffefb; border:1.5px solid var(--card-border);
+    border-radius:13px; padding:12px 14px;
+    display:flex; align-items:center; justify-content:space-between;
+    cursor:pointer;
+  }
+  .match-info{display:flex; align-items:center; gap:9px;}
+  .badge{
+    font-size:11px; font-weight:700; padding:4px 9px; border-radius:9px;
+    color:#0e3833; flex-shrink:0;
+  }
+  .badge.win{background:var(--win);}
+  .badge.lose{background:var(--lose); color:#7a2a1c;}
+  .badge.draw{background:var(--draw); color:var(--text-main);}
+  .opponent{font-weight:700; font-size:14px;}
+  .meta{font-size:12px; color:var(--text-sub); text-align:right;}
+  .arrow{color:var(--text-sub); font-size:13px; margin-left:6px;}
+
+  .bottom-nav{
+    display:flex; justify-content:space-around;
+    padding:12px 6px; border-top:1.5px solid var(--card-border); background:#fffefb;
+    font-size:10px; color:var(--text-sub);
+  }
+  .bottom-nav .item{display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer;}
+  .bottom-nav .item.active{color:var(--teal-dark); font-weight:700;}
+</style>
+</head>
+<body>
+
+<div class="phone">
+  <div class="pad">
+
+    <div class="row">
+      <span>←</span>
+      <b>전적 조회</b>
+    </div>
+
+    <p class="section-label">최근 대국 목록</p>
+
+    <div class="list">
+      <div class="list-item">
+        <div class="match-info">
+          <span class="badge win">승</span>
+          <div>
+            <div class="opponent">vs 구름 (백)</div>
+            <div class="meta">43턴</div>
+          </div>
+        </div>
+        <div class="row"><span class="meta">5분 전</span><span class="arrow">→</span></div>
+      </div>
+
+      <div class="list-item">
+        <div class="match-info">
+          <span class="badge lose">패</span>
+          <div>
+            <div class="opponent">vs 번개 (흑)</div>
+            <div class="meta">28턴</div>
+          </div>
+        </div>
+        <div class="row"><span class="meta">1시간 전</span><span class="arrow">→</span></div>
+      </div>
+
+      <div class="list-item">
+        <div class="match-info">
+          <span class="badge win">승</span>
+          <div>
+            <div class="opponent">vs 오목의 신 (백)</div>
+            <div class="meta">31턴</div>
+          </div>
+        </div>
+        <div class="row"><span class="meta">3시간 전</span><span class="arrow">→</span></div>
+      </div>
+
+      <div class="list-item">
+        <div class="match-info">
+          <span class="badge draw">무</span>
+          <div>
+            <div class="opponent">vs 달빛 (흑)</div>
+            <div class="meta">57턴</div>
+          </div>
+        </div>
+        <div class="row"><span class="meta">어제</span><span class="arrow">→</span></div>
+      </div>
+
+      <div class="list-item">
+        <div class="match-info">
+          <span class="badge win">승</span>
+          <div>
+            <div class="opponent">vs 여우비 (백)</div>
+            <div class="meta">39턴</div>
+          </div>
+        </div>
+        <div class="row"><span class="meta">2일 전</span><span class="arrow">→</span></div>
+      </div>
+    </div>
+
+    <p class="muted" style="font-size:11px; text-align:center; margin:10px 0;">행을 누르면 대국 상세 기록으로 이동해요</p>
+
+  </div>
+
+  <div class="bottom-nav">
+    <div class="item">🏠<span>홈</span></div>
+    <div class="item active">📊<span>전적</span></div>
+    <div class="item">📖<span>도감</span></div>
+    <div class="item">👤<span>프로필</span></div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,5 +1,6 @@
 // client/src/components/auth/LoginForm.tsx
 import React, { useState } from 'react';
+import { loginAPI } from '../../api/auth';
 
 interface LoginFormProps {
   onSwitch: () => void;
@@ -12,30 +13,17 @@ export default function LoginForm({ onSwitch, onAuthSuccess }: LoginFormProps) {
   const [message, setMessage] = useState('');
   const [isError, setIsError] = useState(false);
 
-  // 환경변수가 없을 시 기본 포트 8080 서버 연동
-  const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8080';
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage('');
     setIsError(false);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/users/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
+      const data = await loginAPI({ email, password });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || '로그인에 실패했습니다.');
+      if (data.token) {
+        sessionStorage.setItem('token', data.token);
       }
-
-      localStorage.setItem('accessToken', data.token);
       
       setMessage('로그인에 성공했습니다! 잠시 후 이동합니다.');
       setIsError(false);
@@ -48,7 +36,8 @@ export default function LoginForm({ onSwitch, onAuthSuccess }: LoginFormProps) {
       }, 1000);
 
     } catch (error: any) {
-      setMessage(error.message);
+      const errorMessage = error.response?.data?.message || error.message || '로그인에 실패했습니다.';
+      setMessage(errorMessage);
       setIsError(true);
     }
   };

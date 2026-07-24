@@ -25,7 +25,8 @@ RUN npm ci --omit=dev
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/src/config/application.yaml ./src/config/application.yaml
+COPY --from=builder /app/schema.sql ./schema.sql
 
 EXPOSE 8080
 
-CMD ["npm", "start"]
+CMD ["node", "dist/app.js"]

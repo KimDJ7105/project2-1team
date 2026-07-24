@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>증강오목 - 메인 로비</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --wood-1:#f6dfae;
+    --wood-2:#f2d29a;
+    --wood-line:#3d2c1a;
+    --teal:#3ecfc0;
+    --teal-dark:#22988c;
+    --yellow:#ffcd4a;
+    --yellow-dark:#e0a400;
+    --text-main:#4a3823;
+    --text-sub:#93805f;
+    --card-border:#f0dfc0;
+    --page-bg:#e9e2d3;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{
+    font-family:'Gowun Dodum', sans-serif;
+    background:var(--page-bg);
+    color:var(--text-main);
+    display:flex;
+    justify-content:center;
+    min-height:100vh;
+  }
+  .phone{
+    width:100%;
+    max-width:430px;
+    min-height:100vh;
+    background:#fff7e8;
+    display:flex;
+    flex-direction:column;
+    box-shadow:0 0 40px #0000001a;
+  }
+  .pad{padding:22px 20px;}
+  .row{display:flex; align-items:center; gap:10px;}
+  .between{justify-content:space-between;}
+
+  .avatar{
+    width:44px;height:44px;border-radius:50%;
+    background:linear-gradient(135deg,#ffd9a0,#ffb877);
+    display:flex; align-items:center; justify-content:center;
+    font-size:22px; flex-shrink:0;
+  }
+  .badge{
+    background:var(--yellow); color:var(--text-main);
+    font-size:12px; font-weight:700; padding:3px 9px;
+    border-radius:10px; display:inline-block; margin-top:3px;
+  }
+
+  .title-sm{font-family:'Jua', sans-serif;}
+  .muted{color:var(--text-sub);}
+
+  .btn{
+    border:none; border-radius:14px; font-family:'Jua', sans-serif;
+    font-size:16px; padding:14px; cursor:pointer; text-align:center;
+    color:#0e3833; background:var(--teal);
+    box-shadow:0 5px 0 var(--teal-dark);
+    width:100%;
+    transition:transform .08s, box-shadow .08s;
+  }
+  .btn:active{transform:translateY(4px); box-shadow:0 1px 0 var(--teal-dark);}
+
+  .section-label{
+    font-size:13px; font-weight:700; color:var(--text-sub);
+    margin:24px 0 10px;
+  }
+
+  .room-list{display:flex; flex-direction:column; gap:10px;}
+  .room-item{
+    background:#fffefb; border:1.5px solid var(--card-border);
+    border-radius:14px; padding:14px 16px;
+    display:flex; align-items:center; justify-content:space-between;
+    cursor:pointer;
+  }
+  .room-item .name{font-weight:700; display:flex; align-items:center; gap:8px;}
+  .room-item .count{color:var(--text-sub); font-size:13px;}
+  .room-item.full{opacity:.6;}
+
+  .bottom-nav{
+    margin-top:auto; display:flex; justify-content:space-around;
+    padding:14px 6px; border-top:1.5px solid var(--card-border); background:#fffefb;
+    font-size:11px; color:var(--text-sub);
+  }
+  .bottom-nav .item{display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer;}
+  .bottom-nav .item.active{color:var(--teal-dark); font-weight:700;}
+</style>
+
+</head>
+<body>
+<div class="phone">
+  <div class="pad" style="display:flex; flex-direction:column; gap:6px; flex:1;">
+
+    <div class="row between">
+      <div class="row">
+        <div class="avatar">🦁</div>
+        <div>
+          <div style="font-weight:700; font-size:15px;">사자님</div>
+          <span class="badge">🏆 1,210</span>
+        </div>
+      </div>
+      <span style="font-size:20px;">🔔</span>
+    </div>
+
+    <div style="text-align:center; margin:22px 0 8px;">
+      <p class="title-sm" style="font-size:40px; margin:0;">증강오목</p>
+      <p class="muted" style="font-size:11px; letter-spacing:.08em; margin:2px 0 0;">AUGMENTED OMOK</p>
+    </div>
+
+    <button class="btn" onclick="sendPrompt && sendPrompt('방 만들기')">＋ 방 만들기</button>
+
+    <p class="section-label">게임방 목록</p>
+    <div class="room-list">
+      <div class="room-item"><span class="name">➕ 사자의 방</span><span class="count">1 / 2</span></div>
+      <div class="room-item"><span class="name">🌱 초보 환영</span><span class="count">1 / 2</span></div>
+      <div class="room-item full"><span class="name">🔒 오목 한판</span><span class="count">2 / 2</span></div>
+      <div class="room-item"><span class="name">👑 고수 대기방</span><span class="count">1 / 2</span></div>
+    </div>
+
+  </div>
+
+  <div class="bottom-nav">
+    <div class="item active">🏠<span>홈</span></div>
+    <div class="item">📊<span>전적</span></div>
+    <div class="item">📖<span>증강도감</span></div>
+    <div class="item">👤<span>프로필</span></div>
+  </div>
+</div>
+</body>
+</html>

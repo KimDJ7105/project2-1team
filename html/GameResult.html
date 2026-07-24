@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>증강오목 - 결과 화면</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --teal:#3ecfc0;
+    --teal-dark:#22988c;
+    --yellow:#ffcd4a;
+    --text-main:#4a3823;
+    --text-sub:#93805f;
+    --card-border:#f0dfc0;
+    --page-bg:#e9e2d3;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:'Gowun Dodum', sans-serif;
+    background:var(--page-bg);
+    color:var(--text-main);
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+  }
+  .phone{
+    width:390px;
+    height:750px;
+    background:#fff7e8;
+    border-radius:34px;
+    overflow:hidden;
+    box-shadow:0 24px 48px -18px #0000004a;
+    display:flex;
+    flex-direction:column;
+    position:relative;
+  }
+  .pad{padding:18px 18px 0; display:flex; flex-direction:column; flex:1; min-height:0;}
+  .row{display:flex; align-items:center; gap:10px;}
+
+  .muted{color:var(--text-sub);}
+
+  .confetti{
+    position:absolute; font-size:16px; opacity:.7;
+    animation:float 3.4s ease-in-out infinite;
+  }
+  @keyframes float{
+    0%,100%{transform:translateY(0) rotate(0deg);}
+    50%{transform:translateY(-10px) rotate(12deg);}
+  }
+
+  .result-title{
+    font-family:'Jua', sans-serif; font-size:38px;
+    text-align:center; margin:34px 0 4px; color:var(--teal-dark);
+  }
+  .result-sub{text-align:center; color:var(--text-sub); font-size:14px; margin:0 0 20px;}
+
+  .vs-row{
+    display:flex; align-items:center; justify-content:center;
+    gap:26px; margin-bottom:22px;
+  }
+  .side{text-align:center;}
+  .avatar{
+    width:64px;height:64px;border-radius:50%;
+    background:linear-gradient(135deg,#ffd9a0,#ffb877);
+    display:flex; align-items:center; justify-content:center;
+    font-size:30px; margin:0 auto 8px;
+  }
+  .side.winner .avatar{box-shadow:0 0 0 4px var(--teal);}
+  .side .name{font-size:13px; font-weight:700;}
+  .vs-label{font-family:'Jua', sans-serif; color:var(--text-sub); font-size:15px;}
+
+  .list-item{
+    background:#fffefb; border:1.5px solid var(--card-border);
+    border-radius:13px; padding:12px 14px;
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:8px;
+  }
+
+  .btn{
+    border:none; border-radius:14px; font-family:'Jua', sans-serif;
+    font-size:15px; padding:12px; cursor:pointer; text-align:center;
+  }
+  .btn.ghost{background:#fffefb; border:1.5px solid var(--card-border); color:var(--text-main);}
+  .btn.teal{background:var(--teal); color:#0e3833; box-shadow:0 4px 0 var(--teal-dark);}
+  .btn:active{transform:translateY(2px);}
+</style>
+</head>
+<body>
+
+<div class="phone">
+  <span class="confetti" style="top:40px; left:36px;">🎊</span>
+  <span class="confetti" style="top:60px; right:44px; animation-delay:.6s;">⚫</span>
+  <span class="confetti" style="top:100px; left:60px; animation-delay:1.2s;">⚪</span>
+  <span class="confetti" style="top:80px; right:80px; animation-delay:1.8s;">🎊</span>
+
+  <div class="pad">
+
+    <p class="result-title">🎉 승리!</p>
+    <p class="result-sub">멋진 한 수였습니다</p>
+
+    <div class="vs-row">
+      <div class="side winner">
+        <div class="avatar">🦁</div>
+        <div class="name">사자 (흑)</div>
+      </div>
+      <span class="vs-label">VS</span>
+      <div class="side">
+        <div class="avatar">☁️</div>
+        <div class="name">구름 (백)</div>
+      </div>
+    </div>
+
+    <div class="list-item"><span class="muted">총 턴 수</span><b>43턴</b></div>
+    <div class="list-item" style="align-items:flex-start; flex-direction:column; gap:6px;">
+      <span class="muted">사용한 증강</span>
+      <div style="font-size:13px; font-weight:700; line-height:1.6;">
+        1. 추가 착수 → 2. 한 턴 더 → 3. 상대 돌 제거
+      </div>
+    </div>
+    <div class="list-item"><span class="muted">획득 포인트</span><b>+25</b></div>
+    <div class="list-item"><span class="muted">레이팅 변화</span><b style="color:var(--teal-dark);">1200 → 1210 (+10)</b></div>
+
+    <div style="flex:1;"></div>
+
+    <div class="row" style="gap:8px; padding-bottom:18px;">
+      <button class="btn ghost" style="flex:1;">다시하기</button>
+      <button class="btn teal" style="flex:1;">메인으로</button>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>
