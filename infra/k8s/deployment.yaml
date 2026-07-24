@@ -20,7 +20,7 @@ spec:
 
       containers:
         - name: team1-backend
-          image: 727646470302.dkr.ecr.ap-northeast-2.amazonaws.com/team1/ecr:prod_2.2
+          image: 727646470302.dkr.ecr.ap-northeast-2.amazonaws.com/team1/ecr:prod_2.5
 
           ports:
             - containerPort: 8080
