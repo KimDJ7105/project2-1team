@@ -1,0 +1,48 @@
+# 백엔드 컨테이너 배포 정의 (기존 EC2 ASG 대체)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: team1-backend
+  namespace: default
+spec:
+  replicas: 1  # HPA가 트래픽에 따라 자동 조절
+
+  selector:
+    matchLabels:
+      app: team1-backend
+
+  template:
+    metadata:
+      labels:
+        app: team1-backend
+    spec:
+      serviceAccountName: team1-backend-sa  # IAM 권한(IRSA) 연결
+
+      containers:
+        - name: team1-backend
+          image: 727646470302.dkr.ecr.ap-northeast-2.amazonaws.com/team1/ecr:prod_2.5
+
+          ports:
+            - containerPort: 8080
+
+          # 민감정보 Secret + 비민감 설정 Secret을 환경변수로 주입
+          envFrom:
+            - secretRef:
+                name: team1-backend-secret-env
+            - secretRef:
+                name: team1-backend-config-env
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

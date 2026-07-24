@@ -324,3 +324,14 @@ credentials
 
 /client/node_modules/
 /server/node_modules/
+
+# 5. Terraform 실행 결과물 (상태 파일, 플랜, provider 캐시)
+infra/terraform/.terraform/
+infra/terraform/*.tfstate
+infra/terraform/*.tfstate.*
+infra/terraform/*.tfplan
+infra/terraform/tfplan.out
+infra/terraform/crash.log
+infra/terraform/crash.*.log
+*.tfvars
+*.tfvars.json

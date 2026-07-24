@@ -1,0 +1,116 @@
+name: Deploy to EKS (prod)
+
+on:
+  push:
+    branches: [prod]
+    paths:
+      - "server/**"
+      - "infra/k8s/**"
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+  EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr-login
+
+      - name: set image tag
+        run: echo "IMAGE_TAG=prod-${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+
+      - name: build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: server
+          push: true
+          tags: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+
+      # 사람이 버전을 직접 붙이지 않고, ECR에 있는 vX.Y.Z 태그 중 가장 높은
+      # 걸 찾아 patch 버전만 자동으로 +1 해서 계산함 (없으면 v1.0.0부터 시작)
+      - name: compute next semver tag from ECR
+        run: |
+          LATEST=$(aws ecr describe-images \
+            --repository-name "$ECR_REPOSITORY" \
+            --query 'imageDetails[].imageTags[]' \
+            --output text \
+            | tr '\t' '\n' \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+            | sort -V \
+            | tail -n1)
+
+          if [ -z "$LATEST" ]; then
+            NEXT_VERSION="v1.0.0"
+          else
+            IFS='.' read -r MAJOR MINOR PATCH <<< "${LATEST#v}"
+            NEXT_VERSION="v${MAJOR}.${MINOR}.$((PATCH + 1))"
+          fi
+
+          echo "NEXT_VERSION=$NEXT_VERSION" >> "$GITHUB_ENV"
+          echo "이전 버전: ${LATEST:-없음} -> 새 버전: $NEXT_VERSION" >> "$GITHUB_STEP_SUMMARY"
+
+      # 방금 push한 이미지(prod-<sha>, 진짜 기준)에 사람이 보기 편한
+      # 버전 태그를 별칭으로 붙임 (재빌드 없이 동일 이미지를 가리키게 함)
+      - name: tag image with computed semver alias
+        run: |
+          MANIFEST=$(aws ecr batch-get-image \
+            --repository-name "$ECR_REPOSITORY" \
+            --image-ids imageTag="$IMAGE_TAG" \
+            --query 'images[0].imageManifest' \
+            --output text)
+
+          aws ecr put-image \
+            --repository-name "$ECR_REPOSITORY" \
+            --image-tag "$NEXT_VERSION" \
+            --image-manifest "$MANIFEST"
+
+      - name: update kubeconfig
+        run: aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION"
+
+      - name: install yq
+        run: |
+          curl -sSL https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 \
+            -o /usr/local/bin/yq
+          chmod +x /usr/local/bin/yq
+
+      - name: set new image in deployment manifest
+        run: |
+          yq -i '.spec.template.spec.containers[0].image = "'"$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"'"' \
+            infra/k8s/deployment.yaml
+
+      - name: apply manifests
+        run: |
+          kubectl apply \
+            -f infra/k8s/service-account.yaml \
+            -f infra/k8s/external-secret-config.yaml \
+            -f infra/k8s/external-secret.yaml \
+            -f infra/k8s/service.yaml \
+            -f infra/k8s/hpa.yaml \
+            -f infra/k8s/ingress.yaml \
+            -f infra/k8s/deployment.yaml
+
+      - name: wait for rollout
+        run: kubectl rollout status deployment/team1-backend -n default --timeout=180s
+
+      - name: smoke test (non-blocking)
+        continue-on-error: true
+        run: curl -sf https://api.jhyang.click/health
