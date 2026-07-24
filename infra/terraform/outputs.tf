@@ -9,3 +9,8 @@ output "cluster_endpoint" {
   description = "EKS 클러스터 API 서버 주소"
   value       = module.eks.cluster_endpoint
 }
+
+output "github_actions_deploy_role_arn" {
+  description = "GitHub Actions 배포 워크플로우가 assume할 IAM 역할 ARN (repo Variables에 등록)"
+  value       = aws_iam_role.github_actions_deploy.arn
+}
