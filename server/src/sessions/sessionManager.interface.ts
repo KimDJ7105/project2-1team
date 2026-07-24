@@ -28,4 +28,13 @@ export interface ISessionManager {
   getActiveSocket(email: string): Promise<string | null>;
   setActiveSocket(email: string, socketId: string): Promise<void>;
   deleteActiveSocket(email: string, socketId: string): Promise<void>;
+
+  // 타이머 및 분산 락 관련 메서드 추가
+  setDisconnectTimer(email: string, roomId: string): Promise<void>;
+  clearDisconnectTimer(email: string): Promise<void>;
+  acquireLock(key: string, ttlSeconds: number): Promise<boolean>;
+
+  // pod 간에 락 기능 구현용 
+  releaseLock(key: string): Promise<void>;
+  acquireLockWithRetry(key: string, ttlSeconds: number, retryCount?: number, delayMs?: number): Promise<boolean>;
 }

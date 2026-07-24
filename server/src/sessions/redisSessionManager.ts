@@ -158,6 +158,38 @@ export class RedisSessionManager implements ISessionManager {
     }
   }
 
+  // 타이머 및 분산 락 관련 메서드 추가
+  async setDisconnectTimer(email: string, roomId: string): Promise<void> {
+    // 5초 뒤에 만료되는 키 생성, 값으로 roomId를 저장하여 방 정보 추적
+    await this.redisClient.set(`disconnect_timer:${email}`, roomId, 'EX', 5);
+  }
+
+  async clearDisconnectTimer(email: string): Promise<void> {
+    await this.redisClient.del(`disconnect_timer:${email}`);
+  }
+
+  async acquireLock(key: string, ttlSeconds: number): Promise<boolean> {
+    // SETNX 기능을 사용하여 락 획득 시도 (이미 키가 존재하면 null 반환)
+    const result = await this.redisClient.set(`lock:${key}`, 'locked', 'EX', ttlSeconds, 'NX');
+    return result === 'OK';
+  }
+
+  // 기존 acquireLock 아래에 추가
+  async releaseLock(key: string): Promise<void> {
+    await this.redisClient.del(`lock:${key}`);
+  }
+
+  // 스핀 락(재시도)이 적용된 락 획득 메서드
+  async acquireLockWithRetry(key: string, ttlSeconds: number, retryCount: number = 10, delayMs: number = 50): Promise<boolean> {
+    for (let i = 0; i < retryCount; i++) {
+      const locked = await this.acquireLock(key, ttlSeconds);
+      if (locked) return true;
+      // 락 획득 실패 시 잠시 대기 후 재시도
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+    return false;
+  }
+
 }
 
 //싱글톤
