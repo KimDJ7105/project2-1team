@@ -1,8 +1,8 @@
-name: Deploy Frontend (dev)
+name: Deploy Frontend (prod)
 
 on:
   push:
-    branches: [dev]
+    branches: [prod]
     paths:
       - "client/**"
 
@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: deploy-frontend-dev
+  group: deploy-frontend-prod
   cancel-in-progress: true
 
 env:

@@ -4,7 +4,8 @@
 
 # --------------------------------------------------
 # 프론트엔드 배포 전용 IAM 역할
-# dev 브랜치에 대한 push로 트리거된 워크플로우만 이 역할을 assume할 수 있음
+# prod 브랜치에 대한 push로 트리거된 워크플로우만 이 역할을 assume할 수 있음
+# (백엔드 배포와 동일하게 prod 브랜치 push 기준으로 통일)
 # --------------------------------------------------
 data "aws_iam_policy_document" "github_actions_frontend_trust" {
   statement {
@@ -24,7 +25,7 @@ data "aws_iam_policy_document" "github_actions_frontend_trust" {
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:KimDJ7105/project2-1team:ref:refs/heads/dev"]
+      values   = ["repo:KimDJ7105/project2-1team:ref:refs/heads/prod"]
     }
   }
 }
