@@ -287,20 +287,12 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     // 현재 끊어지는 소켓이 최신 활성 소켓인 경우에만 맵에서 제거
     await redisSessionManager.deleteActiveSocket(userEmail, socket.id);
 
-    // 사용자가 현재 참여 중인 방이 있는지 확인 후 Redis에 5초짜리 타이머 키 생성
     try {
-      const roomsData = await redisSessionManager.getAllRooms();
-      for (const roomStr of roomsData) {
-        const roomSummary = JSON.parse(roomStr);
-        const room = await gameRoomManager.getRoom(roomSummary.roomId);
-        if (room) {
-          const player = Array.from(room.players.values()).find(p => p.email === userEmail);
-          if (player) {
-            await redisSessionManager.setDisconnectTimer(userEmail, room.roomId);
-            break;
-          }
-        }
-      }
+      // 로비에 있든 방에 있든 무조건 타이머가 돌아가도록 설정
+      const roomId = await redisSessionManager.getUserRoom(userEmail);
+      
+      // 속해있는 방이 없으면 'lobby'를 값으로 넣어 타이머 생성
+      await redisSessionManager.setDisconnectTimer(userEmail, roomId || 'lobby');
     } catch (err) {
       console.error('타이머 설정 중 오류:', err);
     }
@@ -1572,87 +1564,84 @@ async function startServer() {
       if (key.startsWith('disconnect_timer:')) {
         const email = key.split(':')[1];
         
-        // 다중 서버 환경에서 중복 실행을 막기 위해 10초짜리 분산 락 획득 시도
-        const locked = await redisSessionManager.acquireLock(`forfeit:${email}`, 10);
+        const lockKey = `forfeit:${email}`;
+        const locked = await redisSessionManager.acquireLockWithRetry(lockKey, 10);
         if (!locked) return; 
-
-        console.log(`[Timer Expired] ${email} 님의 5초 유예 만료, 몰수패 처리 시작`);
+      
+        console.log(`[Timer Expired] ${email} 님의 5초 유예 만료, 몰수패 및 세션 정리 시작`);
         
         try {
-          // 1. 방 퇴장 및 몰수패 처리 (5초 동안 재연결되지 않은 경우)
-          const roomsData = await redisSessionManager.getAllRooms();
-          for (const roomStr of roomsData) {
-            const roomSummary = JSON.parse(roomStr);
-            const room = await gameRoomManager.getRoom(roomSummary.roomId);
-            if (!room) continue;
-
-            const player = Array.from(room.players.values()).find(p => p.email === email);
-
-            if (player) {
-              console.log(`[Room] 5초 경과로 인한 방(${room.roomId}) 자동 퇴장 처리: ${player.nickname}`)
-
-              // 게임 중이었다면 남은 유저 승리 처리 (유령 방 및 갇힘 방지)
-              if (room.status === 'playing') {
-                room.status = 'finished';
-                const winner = Array.from(room.players.values()).find(p => p.email !== email);
-
-                if (winner) {
-                  io.to(room.roomId).emit('game:system_message', {
-                    message: `상대방의 연결이 끊어졌습니다.`
-                  });
-                  io.to(room.roomId).emit('game:over', {
-                    winner: winner.color,
-                    winnerNickname: winner.nickname,
-                    message: `${player.nickname} 님의 연결 종료(도망)로 승리했습니다!`
-                  });
-
-                  // DB 작업 
-                  try {
-                    await userStateRepositoryImpl.applyGameResult(winner.userId, 'win', 10);
-                    await userStateRepositoryImpl.applyGameResult(player.userId, 'lose', -10);
-                  } catch (err) {
-                    console.error('몰수패 전적 반영 에러:', err);
+          // O(1) 탐색으로 유저가 게임 방에 속해 있었는지 즉시 확인
+          const roomId = await redisSessionManager.getUserRoom(email);
+          
+          // 로비가 아닌 실제 방에 있었다면 몰수패 및 퇴장 로직 실행
+          if (roomId && roomId !== 'lobby') {
+            const room = await gameRoomManager.getRoom(roomId);
+            if (room) {
+              const player = Array.from(room.players.values()).find(p => p.email === email);
+            
+              if (player) {
+                console.log(`[Room] 5초 경과로 인한 방(${room.roomId}) 자동 퇴장 처리: ${player.nickname}`)
+              
+                if (room.status === 'playing') {
+                  room.status = 'finished';
+                  const winner = Array.from(room.players.values()).find(p => p.email !== email);
+                
+                  if (winner) {
+                    io.to(room.roomId).emit('game:system_message', { message: `상대방의 연결이 끊어졌습니다.` });
+                    io.to(room.roomId).emit('game:over', {
+                      winner: winner.color,
+                      winnerNickname: winner.nickname,
+                      message: `${player.nickname} 님의 연결 종료(도망)로 승리했습니다!`
+                    });
+                  
+                    try {
+                      await userStateRepositoryImpl.applyGameResult(winner.userId, 'win', 10);
+                      await userStateRepositoryImpl.applyGameResult(player.userId, 'lose', -10);
+                    } catch (err) {
+                      console.error('몰수패 전적 반영 에러:', err);
+                    }
                   }
                 }
+              
+                await gameRoomManager.leaveRoom(room.roomId, player.socketId);
+              
+                const remainingRoom = await gameRoomManager.getRoom(room.roomId);
+                if (remainingRoom && remainingRoom.players.size > 0) {
+                  io.to(room.roomId).emit('room:update', { players: Array.from(remainingRoom.players.values()) });
+                  const updatedRoom = {
+                    roomId: remainingRoom.roomId,
+                    roomTitle: remainingRoom.roomTitle,
+                    playerCount: remainingRoom.players.size,
+                    status: remainingRoom.status
+                  };
+                  await redisSessionManager.saveRoom(room.roomId, updatedRoom);
+                } else {
+                  await redisSessionManager.deleteRoom(room.roomId);
+                }
+              
+                const updatedRoomsData = await redisSessionManager.getAllRooms();
+                const roomList = updatedRoomsData
+                  .map((rStr: string) => JSON.parse(rStr) as SCRoomSummary)
+                  .filter((r) => r.status !== 'finished');
+                io.emit('room:list', roomList);
               }
-
-              // 방에서 플레이어 제거
-              await gameRoomManager.leaveRoom(room.roomId, player.socketId);
-              await redisSessionManager.deleteUserRoom(email);
-
-              // 남은 사람들에게 업데이트 알림 또는 방 폭파
-              const remainingRoom = await gameRoomManager.getRoom(room.roomId);
-              if (remainingRoom && remainingRoom.players.size > 0) {
-                io.to(room.roomId).emit('room:update', { players: Array.from(remainingRoom.players.values()) });
-                const updatedRoom = {
-                  roomId: remainingRoom.roomId,
-                  roomTitle: remainingRoom.roomTitle,
-                  playerCount: remainingRoom.players.size,
-                  status: remainingRoom.status
-                };
-                await redisSessionManager.saveRoom(room.roomId, updatedRoom);
-              } else {
-                await redisSessionManager.deleteRoom(room.roomId);
-              }
-
-              // 로비 방 목록 갱신
-              const updatedRoomsData = await redisSessionManager.getAllRooms();
-              const roomList = updatedRoomsData
-                .map((rStr: string) => JSON.parse(rStr) as SCRoomSummary)
-                .filter((r) => r.status !== 'finished');
-              io.emit('room:list', roomList);
-              break;
             }
           }
-
-          // 2. 세션 파기
+        
+          // 방 참여 여부와 관계없이 세션 및 모든 매핑 데이터 파기
           const sessionId = await redisSessionManager.getActiveSessionByEmail(email);
           if (sessionId) {
             await redisSessionManager.destroySession(sessionId);
-            console.log(`[세션 정리 완료] 탭 종료 5초 경과로 세션 파기: ${email}`);
           }
+          await redisSessionManager.clearAllUserMappings(email);
+          
+          console.log(`[세션 정리 완료] 탭 종료 5초 경과로 세션 완전 파기: ${email}`);
+        
         } catch (error) {
           console.error(`[세션 정리 오류]:`, error);
+        } finally {
+          await redisSessionManager.releaseLock(lockKey);
         }
       }
     });

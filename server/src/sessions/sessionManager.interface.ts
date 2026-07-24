@@ -42,4 +42,6 @@ export interface ISessionManager {
   setUserRoom(email: string, roomId: string): Promise<void>;
   getUserRoom(email: string): Promise<string | null>;
   deleteUserRoom(email: string): Promise<void>;
+
+  clearAllUserMappings(email: string): Promise<void>
 }

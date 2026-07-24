@@ -3,7 +3,6 @@ import { Request, Response } from 'express';
 import { userService } from '../services/userService';
 import { s3Service } from '../services/s3Service';
 import { redisSessionManager } from '../sessions/redisSessionManager';
-import { disconnectTimerManager } from '../sessions/disconnectTimerManager';
 
 export class UserController {
   // 1. 회원가입 요청 처리
@@ -50,12 +49,7 @@ export class UserController {
       if (existingSessionId) {
         console.log(`[중복 로그인 감지] 기존 세션을 강제 종료하고 새 로그인을 진행합니다: ${email}`);
         
-        // 소켓 종료 대기 타이머가 돌고 있다면 즉시 취소
-        if (disconnectTimerManager.has(email)) {
-          disconnectTimerManager.clear(email);
-        }
-
-        // Redis에 남아있는 기존 유령/활성 세션 파기
+        await redisSessionManager.clearDisconnectTimer(email);
         await redisSessionManager.destroySession(existingSessionId);
       }
 
@@ -96,7 +90,6 @@ export class UserController {
   // 3. 로그아웃 요청 처리
   async logout(req: Request, res: Response): Promise<void> {
     try {
-      // Authorization 헤더 또는 바디에서 토큰 추출
       const authHeader = req.headers.authorization;
       const token = authHeader ? authHeader.split(' ')[1] : req.body.token;
 
@@ -105,11 +98,19 @@ export class UserController {
         return;
       }
 
-      // Redis에서 세션 정보 삭제
+      const sessionData = await redisSessionManager.getSession(token);
+      
+      if (sessionData && sessionData.email) {
+        const email = sessionData.email;
+        // 방금 만든 헬퍼 메서드를 호출하여 이메일과 연관된 모든 매핑 키 삭제
+        await redisSessionManager.clearAllUserMappings(email);
+      }
+
       await redisSessionManager.destroySession(token);
 
       res.status(200).json({ message: '로그아웃이 성공적으로 완료되었습니다.' });
     } catch (error: any) {
+      console.error('[Logout Error]:', error);
       res.status(500).json({ message: '로그아웃 처리 중 서버 오류가 발생했습니다.' });
     }
   }

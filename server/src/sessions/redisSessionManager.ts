@@ -205,6 +205,12 @@ export class RedisSessionManager implements ISessionManager {
     await this.redisClient.del(`user_room:${email}`);
   }
 
+  async clearAllUserMappings(email: string): Promise<void> {
+    await this.redisClient.del(`active_session:${email}`);
+    await this.redisClient.del(`active_socket:${email}`);
+    await this.redisClient.del(`user_room:${email}`);
+    await this.redisClient.del(`disconnect_timer:${email}`);
+  }
 }
 
 //싱글톤
