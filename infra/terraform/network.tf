@@ -80,11 +80,13 @@ resource "aws_internet_gateway" "main" {
   }
 }
 
+# AZ별 NAT Gateway — 하나만 있으면 그 AZ 장애 시 반대편 AZ의 private
+# 서브넷까지 인터넷 경로를 잃으므로, AZ마다 하나씩 둬서 가용성 확보
 resource "aws_eip" "nat" {
   domain = "vpc"
 
   tags = {
-    Name = "team1-ngw-eip"
+    Name = "team1-ngw-eip-a"
   }
 }
 
@@ -93,7 +95,24 @@ resource "aws_nat_gateway" "main" {
   subnet_id     = aws_subnet.public_a.id
 
   tags = {
-    Name = "team1-ngw"
+    Name = "team1-ngw-a"
+  }
+}
+
+resource "aws_eip" "nat_b" {
+  domain = "vpc"
+
+  tags = {
+    Name = "team1-ngw-eip-b"
+  }
+}
+
+resource "aws_nat_gateway" "b" {
+  allocation_id = aws_eip.nat_b.id
+  subnet_id     = aws_subnet.public_b.id
+
+  tags = {
+    Name = "team1-ngw-b"
   }
 }
 
@@ -119,7 +138,20 @@ resource "aws_route_table" "private" {
   }
 
   tags = {
-    Name = "team1-private-rt"
+    Name = "team1-private-rt-a"
+  }
+}
+
+resource "aws_route_table" "private_b" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.b.id
+  }
+
+  tags = {
+    Name = "team1-private-rt-b"
   }
 }
 
@@ -140,7 +172,7 @@ resource "aws_route_table_association" "private_a" {
 
 resource "aws_route_table_association" "private_b" {
   subnet_id      = aws_subnet.private_b.id
-  route_table_id = aws_route_table.private.id
+  route_table_id = aws_route_table.private_b.id
 }
 
 # 데이터 레이어 전용 라우트 테이블 — 로컬 VPC 라우트만 존재, 인터넷/NAT 경로 없음
@@ -168,7 +200,7 @@ resource "aws_vpc_endpoint" "s3" {
   vpc_id            = aws_vpc.main.id
   service_name      = "com.amazonaws.ap-northeast-2.s3"
   vpc_endpoint_type = "Gateway"
-  route_table_ids   = [aws_route_table.private.id, aws_route_table.data.id]
+  route_table_ids   = [aws_route_table.private.id, aws_route_table.private_b.id, aws_route_table.data.id]
 
   tags = {
     Name = "team1-vpce-s3"
