@@ -29,6 +29,8 @@ module "eks" {
       # (없으면 AccessDenied: logs:PutLogEvents 에러 발생)
       iam_role_additional_policies = {
         CloudWatchAgentServerPolicy = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+        # SSH 없이 Session Manager로 노드에 접속하기 위해 추가
+        AmazonSSMManagedInstanceCore = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
       }
     }
   }
