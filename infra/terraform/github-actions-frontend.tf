@@ -40,7 +40,7 @@ resource "aws_iam_role" "github_actions_frontend_deploy" {
 # (버킷은 terraform 밖에서 이미 만들어져 있으므로 data source로 참조)
 # --------------------------------------------------
 data "aws_s3_bucket" "frontend" {
-  bucket = "team1-s3-asg-frontend"
+  bucket = "team1-s3-frontend"
 }
 
 data "aws_iam_policy_document" "github_actions_frontend_s3" {

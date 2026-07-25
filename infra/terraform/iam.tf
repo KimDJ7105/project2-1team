@@ -9,7 +9,7 @@ data "aws_iam_policy_document" "secrets_access" {
 }
 
 resource "aws_iam_policy" "secrets_access" {
-  name   = "team1-secretsmanager-policy"
+  name   = "team1-secrets-manager-policy"
   policy = data.aws_iam_policy_document.secrets_access.json
 }
 
@@ -77,7 +77,7 @@ data "aws_iam_policy_document" "parameter_store_access" {
 }
 
 resource "aws_iam_policy" "parameter_store_access" {
-  name   = "team1-parameterstore-policy"
+  name   = "team1-parameter-store-policy"
   policy = data.aws_iam_policy_document.parameter_store_access.json
 }
 
@@ -125,7 +125,7 @@ data "aws_iam_policy_document" "s3_profile_access" {
 }
 
 resource "aws_iam_policy" "s3_profile_access" {
-  name   = "team1-s3profile-policy"
+  name   = "team1-s3-profile-policy"
   policy = data.aws_iam_policy_document.s3_profile_access.json
 }
 
