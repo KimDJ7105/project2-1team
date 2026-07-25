@@ -121,3 +121,16 @@ resource "aws_route_table_association" "private_b" {
   subnet_id      = aws_subnet.private_b.id
   route_table_id = aws_route_table.private.id
 }
+
+# S3 Gateway Endpoint — private subnet에서 S3로 가는 트래픽이 NAT Gateway를
+# 거치지 않고 AWS 내부망으로 바로 가도록 함 (Gateway 타입은 무료)
+resource "aws_vpc_endpoint" "s3" {
+  vpc_id            = aws_vpc.main.id
+  service_name      = "com.amazonaws.ap-northeast-2.s3"
+  vpc_endpoint_type = "Gateway"
+  route_table_ids   = [aws_route_table.private.id]
+
+  tags = {
+    Name = "team1-vpce-s3"
+  }
+}
