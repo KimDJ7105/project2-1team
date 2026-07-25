@@ -4,11 +4,11 @@
 # ALB/타겟그룹은 AWS Load Balancer Controller가 Ingress를 보고 직접 생성하므로
 # terraform 리소스가 아니라 data source로 조회함
 data "aws_lb" "team1_backend" {
-  name = "k8s-default-team1bac-e659117ec8"
+  name = "k8s-team1shared-8cd80ddf48"
 }
 
 data "aws_lb_target_group" "team1_backend" {
-  name = "k8s-default-team1bac-c79d8c42b2"
+  name = "k8s-default-team1bac-9987a7c31e"
 }
 
 resource "aws_cloudwatch_dashboard" "team1_backend" {
