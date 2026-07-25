@@ -1,4 +1,4 @@
-// CI/CD OIDC 디버그 트리거용 주석
+// CI/CD 배포 파이프라인 트리거 확인용 주석 (2026-07-25)
 import "dotenv/config";
 import express from 'express';
 import { initializeDatabase } from './repositories/mysqlClient';
