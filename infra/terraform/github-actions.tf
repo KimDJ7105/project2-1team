@@ -40,7 +40,7 @@ data "aws_iam_policy_document" "github_actions_trust" {
 }
 
 resource "aws_iam_role" "github_actions_deploy" {
-  name               = "team1-github-actions-deploy"
+  name               = "team1-github-actions-backend-deploy"
   assume_role_policy = data.aws_iam_policy_document.github_actions_trust.json
 }
 

@@ -1,0 +1,14 @@
+{
+  "name": "team1-connection-monitor",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@kubernetes/client-node": "^1.0.0",
+    "express": "^4.19.2"
+  }
+}

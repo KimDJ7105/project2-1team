@@ -4,7 +4,7 @@
 resource "aws_ssm_parameter" "db_host" {
   name  = "/team1/backend/DB_HOST"
   type  = "String"
-  value = "team1-rds.cnqmcq6uwqa3.ap-northeast-2.rds.amazonaws.com"
+  value = aws_db_instance.team1_rds_data.address
 }
 
 resource "aws_ssm_parameter" "db_port" {
@@ -22,13 +22,21 @@ resource "aws_ssm_parameter" "db_name" {
 resource "aws_ssm_parameter" "redis_host" {
   name  = "/team1/backend/REDIS_HOST"
   type  = "String"
-  value = "master.team1-elasticache-redis.q2tpkl.apn2.cache.amazonaws.com"
+  value = aws_elasticache_replication_group.team1_redis_v2.primary_endpoint_address
 }
 
 resource "aws_ssm_parameter" "redis_port" {
   name  = "/team1/backend/REDIS_PORT"
   type  = "String"
   value = "6379"
+}
+
+# server/src/app.ts가 REDIS_HOST/PORT와 별도로 직접 참조하는 연결 URL
+# (원래 콘솔에서 만들어져 있던 것을 편입)
+resource "aws_ssm_parameter" "redis_url" {
+  name  = "/team1/backend/REDIS_URL"
+  type  = "String"
+  value = "redis://${aws_elasticache_replication_group.team1_redis_v2.primary_endpoint_address}:6379"
 }
 
 resource "aws_ssm_parameter" "client_url" {

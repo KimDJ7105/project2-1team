@@ -156,6 +156,8 @@ io.on('connection', (socket: AuthenticatedSocket) => {
   const userEmail = socket.user?.email;
   const userNickname = socket.user?.nickname;
 
+  console.log(`[Server] 유저 ${userNickname} 님이 접속했습니다. (소켓 ID: ${socket.id})`);
+
   // Helper: fetch latest session for this socket (nickname/profileImage), update socket.user
   const fetchLatestSession = async () => {
     try {

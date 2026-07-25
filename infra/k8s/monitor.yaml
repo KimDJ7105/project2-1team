@@ -1,0 +1,91 @@
+# 유저(닉네임/이메일)가 어느 워커노드/파드에서 활동했는지 보여주는 운영용
+# 모니터링 도구. team1-backend 앱 코드는 건드리지 않고, 각 파드의 로그를
+# K8s API로 읽어서 파싱함
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: team1-monitor-sa
+  namespace: default
+
+---
+# 파드 목록/로그 조회만 가능한 최소 권한 (읽기 전용)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: team1-monitor-reader
+  namespace: default
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: team1-monitor-reader-binding
+  namespace: default
+subjects:
+  - kind: ServiceAccount
+    name: team1-monitor-sa
+    namespace: default
+roleRef:
+  kind: Role
+  name: team1-monitor-reader
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: team1-monitor
+  namespace: default
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: team1-monitor
+
+  template:
+    metadata:
+      labels:
+        app: team1-monitor
+    spec:
+      serviceAccountName: team1-monitor-sa
+
+      containers:
+        - name: team1-monitor
+          image: 727646470302.dkr.ecr.ap-northeast-2.amazonaws.com/team1/monitor:latest
+
+          ports:
+            - containerPort: 8080
+
+          envFrom:
+            - secretRef:
+                name: team1-monitor-auth
+
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: team1-monitor-svc
+  namespace: default
+spec:
+  selector:
+    app: team1-monitor
+  ports:
+    - port: 8080
+      targetPort: 8080
