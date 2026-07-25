@@ -1,8 +1,10 @@
-# 외부 트래픽 -> ALB -> Service 연결 (AWS Load Balancer Controller가 감지)
+# team1-backend-ingress와 같은 ALB(group.name: team1-shared)를 공유하되,
+# Basic Auth 때문에 "/" 헬스체크가 401을 받는 문제를 피하기 위해
+# 별도 Ingress로 분리해서 헬스체크 경로만 다르게 지정함
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: team1-backend-ingress
+  name: team1-monitor-ingress
   namespace: default
   annotations:
     kubernetes.io/ingress.class: alb
@@ -11,21 +13,17 @@ metadata:
     alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-northeast-2:727646470302:certificate/9085e196-5c96-4d18-9214-315810d902e6
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}, {"HTTP":80}]'
     alb.ingress.kubernetes.io/ssl-redirect: '443'
-    # Socket.io 웹소켓 고정 세션 (동일 클라이언트 -> 동일 Pod)
-    alb.ingress.kubernetes.io/target-group-attributes: stickiness.enabled=true,stickiness.lb_cookie.duration_seconds=3600
-    # monitor-ingress.yaml과 같은 ALB를 공유하기 위한 그룹 이름
     alb.ingress.kubernetes.io/group.name: team1-shared
-    # "/"는 404를 반환하므로 실제 헬스체크는 /health로 지정
-    alb.ingress.kubernetes.io/healthcheck-path: /health
+    alb.ingress.kubernetes.io/healthcheck-path: /healthz
 spec:
   rules:
-    - host: api.jhyang.click
+    - host: monitor.jhyang.click
       http:
         paths:
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: team1-backend-svc
+                name: team1-monitor-svc
                 port:
                   number: 8080
