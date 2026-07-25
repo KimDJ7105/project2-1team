@@ -12,10 +12,11 @@ resource "aws_s3_bucket" "profile" {
 resource "aws_s3_bucket_public_access_block" "profile" {
   bucket = aws_s3_bucket.profile.id
 
+  # 접근은 presigned URL로만 이루어지므로 퍼블릭 정책이 필요 없음 — 전부 차단
   block_public_acls       = true
   ignore_public_acls      = true
-  block_public_policy     = false
-  restrict_public_buckets = false
+  block_public_policy     = true
+  restrict_public_buckets = true
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "profile" {
@@ -37,21 +38,13 @@ resource "aws_s3_bucket" "frontend" {
   }
 }
 
-resource "aws_s3_bucket_website_configuration" "frontend" {
-  bucket = aws_s3_bucket.frontend.id
-
-  index_document {
-    suffix = "index.html"
-  }
-}
-
 resource "aws_s3_bucket_public_access_block" "frontend" {
   bucket = aws_s3_bucket.frontend.id
 
-  block_public_acls       = false
-  ignore_public_acls      = false
-  block_public_policy     = false
-  restrict_public_buckets = false
+  block_public_acls       = true
+  ignore_public_acls      = true
+  block_public_policy     = true
+  restrict_public_buckets = true
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "frontend" {
@@ -65,19 +58,12 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "frontend" {
   }
 }
 
-# 퍼블릭 읽기 + CloudFront(OAC) 접근 허용
+# CDN 강제 접근 정책: 버킷은 비공개로 두고 CloudFront(OAC)를 통해서만 접근 허용
 resource "aws_s3_bucket_policy" "frontend" {
   bucket = aws_s3_bucket.frontend.id
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      {
-        Sid       = "PublicReadGetObject"
-        Effect    = "Allow"
-        Principal = "*"
-        Action    = "s3:GetObject"
-        Resource  = "${aws_s3_bucket.frontend.arn}/*"
-      },
       {
         Sid       = "AllowCloudFrontServicePrincipal"
         Effect    = "Allow"
