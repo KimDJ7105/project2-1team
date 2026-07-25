@@ -60,6 +60,7 @@
   table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   th, td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--border); }
   th { color: var(--text-sub); font-weight: 500; }
+  .type-connect { color: #81c784; }
   .type-disconnect { color: #e07a5f; }
   .type-reconnect { color: var(--accent); }
   .type-duplicate_login { color: var(--warn); }
@@ -77,6 +78,7 @@
 const REFRESH_MS = 5000;
 
 const TYPE_LABEL = {
+  connect: '접속',
   disconnect: '연결 해제',
   reconnect: '재접속(새로고침)',
   duplicate_login: '중복 접속 감지',

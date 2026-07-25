@@ -18,6 +18,11 @@ const coreApi = kc.makeApiClient(k8s.CoreV1Api);
 // 이미 찍히고 있는 로그 문구만 파싱함 — 문구가 바뀌면 여기도 같이 고쳐야 함)
 const PATTERNS = [
   {
+    type: 'connect',
+    regex: /\[Server\] 유저 (.+?) 님이 접속했습니다\. \(소켓 ID: (\S+)\)/,
+    extract: (m) => ({ nickname: m[1], socketId: m[2] }),
+  },
+  {
     type: 'disconnect',
     regex: /\[Server\] 유저 (.+?) 님의 접속이 끊겼습니다\. \(소켓 ID: (\S+)\)/,
     extract: (m) => ({ nickname: m[1], socketId: m[2] }),
