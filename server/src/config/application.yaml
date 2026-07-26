@@ -24,8 +24,8 @@ production:
     type: "mysql"
     host: ${DB_HOST:127.0.0.1}
     port: ${DB_PORT:3306}
-    username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:1234}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     database: ${DB_NAME:testdb}
   redis:
     host: ${REDIS_HOST:localhost}
