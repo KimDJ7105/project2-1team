@@ -39,3 +39,15 @@ variable "elasticache_sg_id" {
 variable "acm_cert_arn" {
   default = "arn:aws:acm:ap-northeast-2:727646470302:certificate/9085e196-5c96-4d18-9214-315810d902e6" # jhyang.click SSL 인증서
 }
+
+variable "grafana_admin_user" {
+  description = "Grafana admin 로그인 아이디 (실제 값은 커밋되지 않는 secrets.auto.tfvars에서 주입)"
+  type        = string
+  sensitive   = true
+}
+
+variable "grafana_admin_password" {
+  description = "Grafana admin 비밀번호 (실제 값은 커밋되지 않는 secrets.auto.tfvars에서 주입)"
+  type        = string
+  sensitive   = true
+}

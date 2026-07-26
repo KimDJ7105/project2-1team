@@ -21,8 +21,8 @@ module "eks" {
       name           = "team1-eks-nodegroup"
       instance_types = ["t3.medium"]
       min_size       = 1
-      max_size       = 3
-      desired_size   = 2
+      max_size       = 4
+      desired_size   = 4 # ebs-csi-node DaemonSet까지 추가되며 노드 하나가 17 pod 한도에 다시 도달해 1대 더 늘림
       subnet_ids     = var.private_subnet_ids
 
       # CloudWatch Observability 애드온이 로그/지표를 전송하려면 필요

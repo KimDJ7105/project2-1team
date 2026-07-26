@@ -1,0 +1,29 @@
+# team1-backend-ingress/team1-monitor-ingress와 같은 ALB(group.name: team1-shared)를
+# 공유하는 별도 Ingress. Grafana 서비스는 kube-prometheus-stack Helm 차트가 생성함
+# (kube-prometheus-stack-grafana, 80번 포트).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana-ingress
+  namespace: monitoring
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-northeast-2:727646470302:certificate/9085e196-5c96-4d18-9214-315810d902e6
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}, {"HTTP":80}]'
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    alb.ingress.kubernetes.io/group.name: team1-shared
+    alb.ingress.kubernetes.io/healthcheck-path: /api/health
+spec:
+  rules:
+    - host: grafana.jhyang.click
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kube-prometheus-stack-grafana
+                port:
+                  number: 80
