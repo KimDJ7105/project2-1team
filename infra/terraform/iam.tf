@@ -107,6 +107,29 @@ resource "aws_eks_access_policy_association" "admin" {
   }
 }
 
+# 학생 IAM 계정용 EKS 접근 권한(Access Entry) 등록
+# IAM 사용자 자체는 Terraform 밖(조직 계정 관리)에서 이미 생성되어 있으므로
+# ARN만 조합해서 참조함
+resource "aws_eks_access_entry" "students" {
+  for_each = toset(var.student_users)
+
+  cluster_name  = module.eks.cluster_name
+  principal_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/${each.value}"
+  type          = "STANDARD"
+}
+
+resource "aws_eks_access_policy_association" "students" {
+  for_each = toset(var.student_users)
+
+  cluster_name  = module.eks.cluster_name
+  principal_arn = aws_eks_access_entry.students[each.key].principal_arn
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+
+  access_scope {
+    type = "cluster"
+  }
+}
+
 # S3 프로필 버킷 접근 권한: team1-s3-profile 버킷에만 읽기/쓰기 허용
 data "aws_iam_policy_document" "s3_profile_access" {
   statement {

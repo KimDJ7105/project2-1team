@@ -51,3 +51,10 @@ variable "grafana_admin_password" {
   type        = string
   sensitive   = true
 }
+
+# team1 EKS 클러스터에 접근 권한이 필요한 학생 IAM 사용자 (계정 자체는 Terraform 밖에서 생성됨)
+variable "student_users" {
+  description = "team1-eks 클러스터 관리자 권한을 부여할 학생 IAM 사용자 이름 목록"
+  type        = list(string)
+  default     = ["a-student-04", "a-student-05"]
+}
