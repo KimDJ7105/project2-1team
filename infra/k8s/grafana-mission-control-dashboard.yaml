@@ -220,10 +220,10 @@ data:
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "targets": [
             {
-              "expr": "100 * (1 - avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])))",
+              "expr": "100 * (1 - avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m]))) * on(instance) group_left(nodename) node_uname_info",
               "instant": true,
               "refId": "A",
-              "legendFormat": "{{instance}}"
+              "legendFormat": "{{nodename}}"
             }
           ],
           "options": {
@@ -256,10 +256,10 @@ data:
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "targets": [
             {
-              "expr": "100 * (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes))",
+              "expr": "100 * (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * on(instance) group_left(nodename) node_uname_info",
               "instant": true,
               "refId": "A",
-              "legendFormat": "{{instance}}"
+              "legendFormat": "{{nodename}}"
             }
           ],
           "options": {
@@ -300,9 +300,9 @@ data:
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "targets": [
             {
-              "expr": "100 * (1 - avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])))",
+              "expr": "100 * (1 - avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m]))) * on(instance) group_left(nodename) node_uname_info",
               "refId": "A",
-              "legendFormat": "{{instance}}"
+              "legendFormat": "{{nodename}}"
             }
           ],
           "options": {
@@ -334,9 +334,9 @@ data:
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "targets": [
             {
-              "expr": "100 * (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes))",
+              "expr": "100 * (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * on(instance) group_left(nodename) node_uname_info",
               "refId": "A",
-              "legendFormat": "{{instance}}"
+              "legendFormat": "{{nodename}}"
             }
           ],
           "options": {
