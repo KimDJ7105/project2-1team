@@ -81,10 +81,20 @@ prometheus-node-exporter:
       memory: 64Mi
 
 grafana:
+  # 단일 레플리카 + EBS(RWO) PVC 조합에서 기본 RollingUpdate 전략을 쓰면 새 파드가
+  # 기존 파드가 물고 있는 볼륨을 동시에 붙이지 못해 Multi-Attach 에러로 멈춤.
+  # 기존 파드를 먼저 종료한 뒤 새 파드를 띄우도록 변경.
+  deploymentStrategy:
+    type: Recreate
+
   # 대시보드/UI에 표시되는 시간대를 한국 표준시(KST)로 고정 (Prometheus 저장 데이터 자체는 UTC 그대로)
   grafana.ini:
     date_formats:
       default_timezone: Asia/Seoul
+    dashboards:
+      # sidecar가 ConfigMap 대시보드를 내려받는 기본 경로(/tmp/dashboards)에 있는
+      # team1-mission-control.json을 홈 화면으로 지정
+      default_home_dashboard_path: /tmp/dashboards/team1-mission-control.json
 
   serviceAccount:
     create: true
@@ -104,13 +114,14 @@ grafana:
     storageClassName: gp3
     size: 5Gi
 
+  # Grafana 13.x는 bleve 인덱싱 등으로 256Mi 한도에서 OOMKilled 발생 확인 -> 상향
   resources:
     requests:
       cpu: 100m
-      memory: 128Mi
-    limits:
-      cpu: 200m
       memory: 256Mi
+    limits:
+      cpu: 300m
+      memory: 512Mi
 
   # ALB Ingress는 infra/k8s/grafana-ingress.yaml에서 다른 서비스들과 동일한
   # 패턴(team1-shared 그룹)으로 별도 관리
