@@ -19,10 +19,10 @@ resource "aws_cloudwatch_dashboard" "team1_backend" {
     cluster_name    = module.eks.cluster_name
     alb_arn_suffix  = data.aws_lb.team1_backend.arn_suffix
     tg_arn_suffix   = data.aws_lb_target_group.team1_backend.arn_suffix
-    rds_id          = "team1-rds"
-    redis_cluster_1 = "team1-elasticache-redis-001"
-    redis_cluster_2 = "team1-elasticache-redis-002"
-    redis_cluster_3 = "team1-elasticache-redis-003"
+    rds_id          = aws_db_instance.team1_rds_data.identifier
+    redis_cluster_1 = "team1-elasticache-redis-v2-001"
+    redis_cluster_2 = "team1-elasticache-redis-v2-002"
+    redis_cluster_3 = "team1-elasticache-redis-v2-003"
     cloudfront_id   = "E2DY5SXDS0HIEB"
     log_group       = "/aws/containerinsights/${module.eks.cluster_name}/application"
   })
