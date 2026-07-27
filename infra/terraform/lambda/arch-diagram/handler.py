@@ -286,6 +286,8 @@ def get_route53():
             continue
         if rec["Name"].startswith("_"):
             continue
+        if rec["Name"].rstrip(".") == "www." + DOMAIN:
+            continue  # 개인 사이트, team1 인프라 아님
         target = None
         if "AliasTarget" in rec:
             target = rec["AliasTarget"]["DNSName"].rstrip(".")
