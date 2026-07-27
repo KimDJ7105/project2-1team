@@ -33,6 +33,18 @@ provider "aws" {
   }
 }
 
+# CloudFront 지표(Alarm)는 us-east-1에만 존재하므로 별도 alias 필요
+provider "aws" {
+  alias  = "us_east_1"
+  region = "us-east-1"
+
+  default_tags {
+    tags = {
+      Team = "team1"
+    }
+  }
+}
+
 provider "kubernetes" {
   host                   = module.eks.cluster_endpoint
   cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
