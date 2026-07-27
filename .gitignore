@@ -333,5 +333,6 @@ infra/terraform/*.tfplan
 infra/terraform/tfplan.out
 infra/terraform/crash.log
 infra/terraform/crash.*.log
+infra/terraform/lambda/*.zip
 *.tfvars
 *.tfvars.json

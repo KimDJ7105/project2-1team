@@ -20,6 +20,11 @@ terraform {
       source  = "hashicorp/http"
       version = "~> 3.4"
     }
+    # arch-diagram.tf의 Lambda 배포 패키지(zip) 생성용
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.4"
+    }
   }
 }
 
