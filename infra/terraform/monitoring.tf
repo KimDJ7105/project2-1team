@@ -162,6 +162,7 @@ resource "helm_release" "kube_prometheus_stack" {
   values = [
     templatefile("${path.module}/monitoring-values/kube-prometheus-stack.yaml.tpl", {
       grafana_irsa_role_arn = module.grafana_irsa.iam_role_arn
+      cluster_name          = module.eks.cluster_name
     })
   ]
 

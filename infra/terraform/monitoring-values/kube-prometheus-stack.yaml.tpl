@@ -14,6 +14,10 @@ kubeProxy:
 
 prometheus:
   prometheusSpec:
+    # kube-prometheus-stack 기본 대시보드들의 $cluster 변수가 이 라벨을 조회함.
+    # 없으면 라벨 목록이 비어 모든 기본 대시보드 패널이 빈 화면으로 나옴.
+    externalLabels:
+      cluster: ${cluster_name}
     retention: 7d
     resources:
       requests:
