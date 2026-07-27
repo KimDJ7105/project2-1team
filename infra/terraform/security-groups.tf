@@ -7,7 +7,8 @@ resource "aws_security_group" "rds" {
   vpc_id      = aws_vpc.main.id
 
   tags = {
-    Name = "team1-sg-rds"
+    Name    = "team1-sg-rds"
+    Purpose = "RDS(team1-rds-data) 접근 제어 — EKS 워커노드에서만 3306 허용"
   }
 
   lifecycle {
@@ -21,8 +22,9 @@ resource "aws_security_group" "elasticache" {
   vpc_id      = aws_vpc.main.id
 
   tags = {
-    Name = "team1-sg-elasticache"
-    Team = "team1"
+    Name    = "team1-sg-elasticache"
+    Team    = "team1"
+    Purpose = "ElastiCache(Redis) 접근 제어 — EKS 워커노드에서만 6379 허용"
   }
 
   lifecycle {

@@ -5,7 +5,8 @@ resource "aws_vpc" "main" {
   cidr_block = "10.4.0.0/16"
 
   tags = {
-    Name = "team1-vpc"
+    Name    = "team1-vpc"
+    Purpose = "team1 프로젝트 전체 네트워크(EKS/RDS/ElastiCache/ALB 공용)"
   }
 }
 
@@ -16,7 +17,8 @@ resource "aws_subnet" "public_a" {
   map_public_ip_on_launch = false
 
   tags = {
-    Name = "team1-public-subnet-a"
+    Name    = "team1-public-subnet-a"
+    Purpose = "ALB 배치용 Public 서브넷 (2a)"
   }
 }
 
@@ -27,7 +29,8 @@ resource "aws_subnet" "public_b" {
   map_public_ip_on_launch = false
 
   tags = {
-    Name = "team1-public-subnet-b"
+    Name    = "team1-public-subnet-b"
+    Purpose = "ALB 배치용 Public 서브넷 (2b)"
   }
 }
 
@@ -37,7 +40,8 @@ resource "aws_subnet" "private_a" {
   availability_zone = "ap-northeast-2a"
 
   tags = {
-    Name = "team1-private-subnet-a"
+    Name    = "team1-private-subnet-a"
+    Purpose = "EKS 워커노드 배치용 Private 서브넷 (2a)"
   }
 }
 
@@ -47,7 +51,8 @@ resource "aws_subnet" "private_b" {
   availability_zone = "ap-northeast-2b"
 
   tags = {
-    Name = "team1-private-subnet-b"
+    Name    = "team1-private-subnet-b"
+    Purpose = "EKS 워커노드 배치용 Private 서브넷 (2b)"
   }
 }
 
@@ -58,7 +63,8 @@ resource "aws_subnet" "data_a" {
   availability_zone = "ap-northeast-2a"
 
   tags = {
-    Name = "team1-data-subnet-a"
+    Name    = "team1-data-subnet-a"
+    Purpose = "RDS/ElastiCache 전용 Private 서브넷, 컴퓨트(EKS)와 분리 (2a)"
   }
 }
 
@@ -68,7 +74,8 @@ resource "aws_subnet" "data_b" {
   availability_zone = "ap-northeast-2b"
 
   tags = {
-    Name = "team1-data-subnet-b"
+    Name    = "team1-data-subnet-b"
+    Purpose = "RDS/ElastiCache 전용 Private 서브넷, 컴퓨트(EKS)와 분리 (2b)"
   }
 }
 
@@ -76,7 +83,8 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name = "team1-vpc-igw"
+    Name    = "team1-vpc-igw"
+    Purpose = "Public 서브넷(ALB)의 인터넷 진출입 경로"
   }
 }
 
@@ -86,7 +94,8 @@ resource "aws_eip" "nat" {
   domain = "vpc"
 
   tags = {
-    Name = "team1-ngw-eip-a"
+    Name    = "team1-ngw-eip-a"
+    Purpose = "2a NAT Gateway용 고정 IP"
   }
 }
 
@@ -95,7 +104,8 @@ resource "aws_nat_gateway" "main" {
   subnet_id     = aws_subnet.public_a.id
 
   tags = {
-    Name = "team1-ngw-a"
+    Name    = "team1-ngw-a"
+    Purpose = "2a Private 서브넷(EKS 워커노드)의 아웃바운드 인터넷 경로"
   }
 }
 
@@ -103,7 +113,8 @@ resource "aws_eip" "nat_b" {
   domain = "vpc"
 
   tags = {
-    Name = "team1-ngw-eip-b"
+    Name    = "team1-ngw-eip-b"
+    Purpose = "2b NAT Gateway용 고정 IP"
   }
 }
 
@@ -112,7 +123,8 @@ resource "aws_nat_gateway" "b" {
   subnet_id     = aws_subnet.public_b.id
 
   tags = {
-    Name = "team1-ngw-b"
+    Name    = "team1-ngw-b"
+    Purpose = "2b Private 서브넷(EKS 워커노드)의 아웃바운드 인터넷 경로"
   }
 }
 
@@ -125,7 +137,8 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
-    Name = "team1-public-rt"
+    Name    = "team1-public-rt"
+    Purpose = "Public 서브넷(ALB) 라우팅 — IGW로 직결"
   }
 }
 
@@ -138,7 +151,8 @@ resource "aws_route_table" "private" {
   }
 
   tags = {
-    Name = "team1-private-rt-a"
+    Name    = "team1-private-rt-a"
+    Purpose = "2a Private 서브넷 라우팅 — 2a NAT Gateway로"
   }
 }
 
@@ -151,7 +165,8 @@ resource "aws_route_table" "private_b" {
   }
 
   tags = {
-    Name = "team1-private-rt-b"
+    Name    = "team1-private-rt-b"
+    Purpose = "2b Private 서브넷 라우팅 — 2b NAT Gateway로"
   }
 }
 
@@ -180,7 +195,8 @@ resource "aws_route_table" "data" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name = "team1-data-rt"
+    Name    = "team1-data-rt"
+    Purpose = "데이터 레이어(RDS/ElastiCache) 라우팅 — 인터넷/NAT 경로 없음"
   }
 }
 
@@ -203,6 +219,7 @@ resource "aws_vpc_endpoint" "s3" {
   route_table_ids   = [aws_route_table.private.id, aws_route_table.private_b.id, aws_route_table.data.id]
 
   tags = {
-    Name = "team1-vpce-s3"
+    Name    = "team1-vpce-s3"
+    Purpose = "Private 서브넷 -> S3 트래픽을 NAT Gateway 없이 AWS 내부망으로 처리"
   }
 }
