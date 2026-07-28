@@ -4,7 +4,7 @@
 data "aws_iam_policy_document" "secrets_access" {
   statement {
     actions   = ["secretsmanager:GetSecretValue"]
-    resources = ["arn:aws:secretsmanager:ap-northeast-2:727646470302:secret:team1/backend/secrets-9Nd1bh"]
+    resources = [aws_secretsmanager_secret.backend.arn]
   }
 }
 

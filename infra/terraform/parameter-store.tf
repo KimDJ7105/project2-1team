@@ -1,5 +1,20 @@
 # SSM Parameter Store에 비민감 설정값 등록
-# 민감정보(DB_PASSWORD, DB_USERNAME)는 Secrets Manager에 그대로 둠
+# 민감정보(DB_PASSWORD, DB_USERNAME)는 Secrets Manager로 별도 관리 (아래 참고)
+
+# team1/backend/secrets — 콘솔에서 이미 만들어져 있던 시크릿을 Terraform으로 편입
+# (DB 서브넷 마이그레이션 이전 값이 섞여 있던 DB_HOST/REDIS_HOST/CLIENT_URL 등 미사용
+# 필드는 정리하고, 실제로 external-secret.yaml이 읽는 DB_USERNAME/DB_PASSWORD만 관리)
+resource "aws_secretsmanager_secret" "backend" {
+  name = "team1/backend/secrets"
+}
+
+resource "aws_secretsmanager_secret_version" "backend" {
+  secret_id = aws_secretsmanager_secret.backend.id
+  secret_string = jsonencode({
+    DB_USERNAME = var.db_username
+    DB_PASSWORD = var.db_password
+  })
+}
 
 resource "aws_ssm_parameter" "db_host" {
   name  = "/team1/backend/DB_HOST"

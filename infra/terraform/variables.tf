@@ -57,6 +57,18 @@ variable "grafana_admin_password" {
   sensitive   = true
 }
 
+variable "db_username" {
+  description = "team1-rds-data 백엔드 접속 계정 (실제 값은 커밋되지 않는 secrets.auto.tfvars에서 주입)"
+  type        = string
+  sensitive   = true
+}
+
+variable "db_password" {
+  description = "team1-rds-data 백엔드 접속 비밀번호 (실제 값은 커밋되지 않는 secrets.auto.tfvars에서 주입)"
+  type        = string
+  sensitive   = true
+}
+
 # team1 EKS 클러스터에 접근 권한이 필요한 학생 IAM 사용자 (계정 자체는 Terraform 밖에서 생성됨)
 variable "student_users" {
   description = "team1-eks 클러스터 관리자 권한을 부여할 학생 IAM 사용자 이름 목록"
